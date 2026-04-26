@@ -4,24 +4,22 @@ namespace App\Models;
 
 use CodeIgniter\Model;
 
-class SiswaModel extends Model
+class GuruModel extends Model
 {
-
-    protected $table = 'siswa';
-
-    protected $primaryKey = 'id';
-
+    protected $table = 'guru';
+    protected $primaryKey = 'id_guru';
     protected $returnType = 'array';
 
     protected $allowedFields = [
         'nama',
-        'no_induk',
-        'kelas',
-        'alamat',
+        'nip',
+        'username',
+        'password',
+        'kelas_wali',
+        'is_wali_kelas',
         'id_rfid',
         'foto_wajah',
         'created_at',
         'updated_at',
     ];
-
 }

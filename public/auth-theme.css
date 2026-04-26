@@ -1,0 +1,320 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap');
+
+:root {
+    --ink: #132a2d;
+    --ink-soft: #406268;
+    --card: rgba(255, 255, 255, 0.88);
+    --line: rgba(14, 76, 80, 0.22);
+    --primary: #0f766e;
+    --primary-strong: #0a4f4a;
+    --accent: #f59e0b;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body.auth-page {
+    margin: 0;
+    min-height: 100vh;
+    font-family: 'Manrope', sans-serif;
+    color: var(--ink);
+    background: #f3f8f6;
+}
+
+.auth-backdrop {
+    position: fixed;
+    inset: 0;
+    background:
+        linear-gradient(124deg, rgba(4, 56, 59, 0.78), rgba(6, 47, 53, 0.36), rgba(4, 56, 59, 0.74)),
+        url('/assets/sekolah.jpg') center/cover no-repeat;
+    z-index: -2;
+}
+
+.auth-backdrop::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 12% 14%, rgba(245, 158, 11, 0.18), transparent 44%),
+        radial-gradient(circle at 83% 20%, rgba(103, 232, 249, 0.2), transparent 40%);
+}
+
+.site-nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(8px);
+    background: rgba(5, 35, 38, 0.55);
+}
+
+.site-nav-inner {
+    max-width: 1160px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    gap: 14px;
+}
+
+.brand-mark {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: #e4fffb;
+}
+
+.brand-mark strong {
+    font-family: 'Sora', sans-serif;
+    letter-spacing: 0.01em;
+    font-size: 20px;
+}
+
+.brand-mark span {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    opacity: 0.78;
+    font-weight: 700;
+}
+
+.center-links {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+}
+
+.center-links a {
+    text-decoration: none;
+    color: rgba(238, 255, 252, 0.92);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 7px 11px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    transition: all 0.16s ease;
+}
+
+.center-links a:hover {
+    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.auth-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    border-radius: 999px;
+    padding: 9px 15px;
+    font-weight: 800;
+    font-size: 13px;
+    transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.auth-btn:hover {
+    transform: translateY(-1px);
+}
+
+.auth-btn.block {
+    width: 100%;
+}
+
+.auth-btn.primary {
+    color: #f8fffd;
+    background: linear-gradient(120deg, var(--primary), var(--primary-strong));
+    box-shadow: 0 12px 20px rgba(10, 79, 74, 0.3);
+}
+
+.auth-btn.light {
+    color: #0a4944;
+    background: rgba(243, 255, 252, 0.94);
+}
+
+.hero-shell {
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 56px 18px 72px;
+}
+
+.hero-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 20px;
+    align-items: stretch;
+}
+
+.hero-main,
+.hero-side {
+    border-radius: 26px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(240, 255, 251, 0.14);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 24px 48px rgba(3, 29, 33, 0.26);
+}
+
+.hero-main {
+    padding: 34px 32px;
+    color: #f1fffc;
+    animation: rise 0.48s ease both;
+}
+
+.hero-main h1 {
+    margin: 0 0 16px;
+    font-family: 'Sora', sans-serif;
+    font-size: clamp(27px, 4.5vw, 44px);
+    line-height: 1.18;
+}
+
+.hero-main p {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.7;
+    max-width: 95%;
+    color: rgba(235, 255, 251, 0.88);
+}
+
+.hero-actions {
+    margin-top: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.hero-side {
+    padding: 22px;
+    display: grid;
+    gap: 12px;
+    animation: rise 0.58s ease both;
+}
+
+.info-card {
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    background: var(--card);
+    padding: 16px;
+}
+
+.info-card h3 {
+    margin: 0 0 10px;
+    font-family: 'Sora', sans-serif;
+    font-size: 15px;
+}
+
+.info-card ul {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--ink-soft);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.login-shell {
+    width: min(430px, calc(100% - 28px));
+    margin: clamp(48px, 8vw, 100px) auto;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    background: rgba(243, 255, 252, 0.12);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 24px 50px rgba(3, 31, 35, 0.28);
+    padding: 26px;
+    animation: rise 0.48s ease both;
+}
+
+.login-card {
+    border-radius: 18px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    padding: 20px;
+}
+
+.login-card h2 {
+    margin: 0;
+    font-family: 'Sora', sans-serif;
+}
+
+.login-subtitle {
+    margin-top: 8px;
+    margin-bottom: 18px;
+    color: var(--ink-soft);
+    font-size: 14px;
+}
+
+.field-block {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.field-block label {
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.field-block input {
+    width: 100%;
+    border-radius: 11px;
+    border: 1px solid #bfd8d4;
+    padding: 10px 12px;
+    font: inherit;
+}
+
+.field-block input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+}
+
+.captcha-box {
+    border-radius: 12px;
+    border: 1px dashed rgba(15, 118, 110, 0.35);
+    background: #ecfbf6;
+    text-align: center;
+    padding: 10px 8px;
+    margin-bottom: 14px;
+    letter-spacing: 0.28em;
+    font-size: 24px;
+    font-family: 'Sora', sans-serif;
+    color: #0d5f58;
+}
+
+.alert-error {
+    border-radius: 10px;
+    border: 1px solid #f6c6b0;
+    background: #fff0e8;
+    color: #8f2f08;
+    font-size: 13px;
+    padding: 10px 11px;
+    margin-bottom: 14px;
+}
+
+.helper-text {
+    margin-top: 14px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    line-height: 1.6;
+}
+
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 940px) {
+    .hero-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .center-links {
+        display: none;
+    }
+}

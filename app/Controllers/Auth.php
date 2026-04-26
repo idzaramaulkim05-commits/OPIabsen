@@ -2,12 +2,11 @@
 
 namespace App\Controllers;
 
+use App\Models\GuruModel;
 use App\Models\OperatorModel;
-use CodeIgniter\Controller;
 
-class Auth extends Controller
+class Auth extends BaseController
 {
-
     public function landing()
     {
         return view('landing');
@@ -15,55 +14,85 @@ class Auth extends Controller
 
     public function login()
     {
-        $captcha = rand(1000,9999);
-        session()->set('captcha',$captcha);
+        if (session()->get('logged_in')) {
+            return redirect()->to('/dashboard');
+        }
 
-        return view('login',['captcha'=>$captcha]);
+        $captcha = rand(1000, 9999);
+        session()->set('captcha', (string) $captcha);
+
+        return view('login', ['captcha' => $captcha]);
     }
 
     public function loginProcess()
-{
-    $username = $this->request->getPost('username');
-    $password = $this->request->getPost('password');
-    $captchaInput = $this->request->getPost('captcha');
+    {
+        $username = trim((string) $this->request->getPost('username'));
+        $password = (string) $this->request->getPost('password');
+        $captchaInput = trim((string) $this->request->getPost('captcha'));
 
-    $captchaSession = session()->get('captcha');
+        $captchaSession = (string) session()->get('captcha');
+        if ($captchaInput !== $captchaSession) {
+            return redirect()->back()->withInput()->with('error', 'Captcha salah.');
+        }
 
-    // cek captcha
-    if($captchaInput != $captchaSession){
-        return redirect()->back()->with('error','Captcha salah');
-    }
+        $operatorModel = new OperatorModel();
+        $admin = $operatorModel->where('username', $username)->first();
 
-    $model = new OperatorModel();
-
-    $user = $model->where('username',$username)->first();
-
-    if($user){
-
-        // cek password langsung
-        if($password == $user['password']){
-
+        if ($admin && $this->passwordMatches($password, $admin['password'])) {
+            session()->regenerate(true);
             session()->set([
-                'id_admin' => $user['id_admin'],
-                'username' => $user['username'],
-                'logged_in' => true
+                'logged_in' => true,
+                'role' => 'admin',
+                'user_id' => (int) $admin['id_admin'],
+                'username' => $admin['username'],
+                'nama' => $admin['username'],
             ]);
 
             return redirect()->to('/dashboard');
-
-        }else{
-            return redirect()->back()->with('error','Password salah');
         }
 
-    }else{
-        return redirect()->back()->with('error','Username tidak ditemukan');
+        $guruModel = new GuruModel();
+        $guru = $guruModel->where('username', $username)->first();
+
+        if ($guru && $this->passwordMatches($password, $guru['password'])) {
+            $kelasWali = trim((string) ($guru['kelas_wali'] ?? ''));
+            $isWaliKelas = (int) ($guru['is_wali_kelas'] ?? 0) === 1 && $kelasWali !== '';
+
+            session()->regenerate(true);
+            session()->set([
+                'logged_in' => true,
+                'role' => 'guru',
+                'user_id' => (int) $guru['id_guru'],
+                'id_guru' => (int) $guru['id_guru'],
+                'username' => $guru['username'],
+                'nama' => $guru['nama'],
+                'is_wali_kelas' => $isWaliKelas ? 1 : 0,
+                'kelas_wali' => $isWaliKelas ? $kelasWali : '',
+            ]);
+
+            return redirect()->to('/dashboard');
+        }
+
+        return redirect()->back()->withInput()->with('error', 'Username atau password tidak valid.');
     }
-}
 
     public function logout()
     {
         session()->destroy();
+
         return redirect()->to('/login');
     }
 
+    private function passwordMatches(string $input, ?string $stored): bool
+    {
+        if ($stored === null || $stored === '') {
+            return false;
+        }
+
+        if (password_verify($input, $stored)) {
+            return true;
+        }
+
+        return hash_equals($stored, $input);
+    }
 }

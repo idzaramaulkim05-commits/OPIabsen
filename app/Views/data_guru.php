@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Siswa</title>
+    <title>Data Guru</title>
     <link rel="stylesheet" href="<?= base_url('app-theme.css') ?>">
 </head>
 <body class="app-page">
@@ -11,7 +11,7 @@
         <div class="app-topbar-inner">
             <div class="brand-stack">
                 <span class="brand-kicker">SmartPresence</span>
-                <h1 class="brand-title">Data Siswa</h1>
+                <h1 class="brand-title">Data Guru</h1>
             </div>
             <div class="topbar-meta">
                 <span class="user-pill"><?= esc((string) (session()->get('nama') ?: session()->get('username'))) ?></span>
@@ -24,10 +24,10 @@
         <div class="nav-pills">
             <a href="<?= base_url('dashboard') ?>">Dashboard</a>
             <a href="<?= base_url('admin/akun') ?>">Akun Admin</a>
-            <a href="<?= base_url('guru') ?>">Data Guru</a>
+            <a href="<?= base_url('siswa/data') ?>">Data Siswa</a>
             <a href="<?= base_url('admin/registrasi') ?>">Registrasi Wajah & RFID</a>
             <a href="<?= base_url('jadwal') ?>">Jadwal</a>
-            <a class="primary" href="<?= base_url('siswa/tambah') ?>">Tambah Siswa</a>
+            <a class="primary" href="<?= base_url('guru/tambah') ?>">Tambah Guru</a>
         </div>
 
         <?php if (session()->getFlashdata('error')): ?>
@@ -46,42 +46,45 @@
                             <th>No</th>
                             <th>Wajah</th>
                             <th>Nama</th>
-                            <th>No Induk</th>
-                            <th>Kelas</th>
-                            <th>Alamat</th>
+                            <th>NIP</th>
+                            <th>Username</th>
                             <th>RFID</th>
+                            <th>Wali Kelas</th>
                             <th>Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php if (! empty($siswa)): ?>
+                        <?php if (! empty($guru)): ?>
                             <?php $no = 1; ?>
-                            <?php foreach ($siswa as $row): ?>
+                            <?php foreach ($guru as $row): ?>
                                 <tr>
                                     <td><?= $no++ ?></td>
                                     <td>
                                         <?php if (! empty($row['foto_wajah'])): ?>
-                                            <img class="face-thumb" src="<?= esc($row['foto_wajah']) ?>" alt="Wajah Siswa">
+                                            <img class="face-thumb" src="<?= esc($row['foto_wajah']) ?>" alt="Wajah Guru">
                                         <?php else: ?>
                                             -
                                         <?php endif; ?>
                                     </td>
                                     <td><?= esc($row['nama']) ?></td>
-                                    <td><?= esc((string) (($row['no_induk'] ?? '') !== '' ? $row['no_induk'] : '-')) ?></td>
-                                    <td><?= esc((string) (($row['kelas'] ?? '') !== '' ? $row['kelas'] : '-')) ?></td>
-                                    <td><?= esc((string) (($row['alamat'] ?? '') !== '' ? $row['alamat'] : '-')) ?></td>
+                                    <td><?= esc($row['nip']) ?></td>
+                                    <td><?= esc($row['username']) ?></td>
                                     <td><?= esc($row['id_rfid'] ?? '-') ?></td>
                                     <td>
+                                        <?= (int) ($row['is_wali_kelas'] ?? 0) === 1 ? 'Ya (' . esc($row['kelas_wali'] ?? '-') . ')' : 'Tidak' ?>
+                                    </td>
+                                    <td>
                                         <div class="actions">
-                                            <a href="<?= base_url('siswa/edit/' . $row['id']) ?>">Edit</a>
-                                            <a class="danger" href="<?= base_url('siswa/hapus/' . $row['id']) ?>" onclick="return confirm('Yakin hapus data siswa ini?')">Hapus</a>
+                                            <a href="<?= base_url('guru/edit/' . $row['id_guru']) ?>">Edit</a>
+                                            <a href="<?= base_url('admin/registrasi?target_type=guru&target_id=' . $row['id_guru']) ?>">Registrasi</a>
+                                            <a class="danger" href="<?= base_url('guru/hapus/' . $row['id_guru']) ?>" onclick="return confirm('Yakin hapus data guru ini?')">Hapus</a>
                                         </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="8">Belum ada data siswa.</td>
+                                <td colspan="8">Belum ada data guru.</td>
                             </tr>
                         <?php endif; ?>
                     </tbody>

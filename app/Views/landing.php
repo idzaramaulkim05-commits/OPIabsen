@@ -1,71 +1,64 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-    <title>Sistem Presensi Digital</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="<?= base_url('landing.css') ?>">
+    <title>SmartPresence</title>
+    <link rel="stylesheet" href="<?= base_url('auth-theme.css') ?>">
 </head>
-<body>
+<body class="auth-page landing-page">
+    <div class="auth-backdrop"></div>
 
-<header class="navbar">
-    <div class="logo">SmartPresence</div>
-
-    <nav class="center-nav">
-        <a href="#">Beranda</a>
-        <a href="#">Tentang</a>
-        <a href="#">Fitur</a>
-        <a href="#">Kontak</a>
-    </nav>
-
-    <a href="<?= base_url('login') ?>" class="btn-login">Login</a>
-</header>
-
-<section class="hero">
-
-    <div class="overlay"></div>
-
-    <div class="hero-inner">
-
-        <div class="hero-content">
-            <h1>
-                Sistem Presensi Digital <br>
-                Berbasis Two Factor Authentication
-            </h1>
-
-            <p>
-                Presensi aman dan terintegrasi untuk meningkatkan
-                kedisiplinan serta keamanan data siswa dan guru.
-            </p>
-
-        </div>
-
-        <div class="info-wrapper">
-
-            <div class="info-card">
-                <h3>Langkah Presensi</h3>
-                <ul>
-                    <li>Login ke sistem</li>
-                    <li>Arahkan wajah ke kamera</li>
-                    <li>Sistem melakukan verifikasi</li>
-                    <li>Presensi tercatat otomatis</li>
-                </ul>
+    <header class="site-nav">
+        <div class="site-nav-inner">
+            <div class="brand-mark">
+                <span>Sistem Presensi Sekolah</span>
+                <strong>SmartPresence</strong>
             </div>
 
-            <div class="info-card">
-                <h3>Keamanan Sistem</h3>
-                <ul>
-                    <li>Login menggunakan akun terdaftar</li>
-                    <li>Verifikasi OTP melalui email</li>
-                    <li>Data terenkripsi dalam database</li>
-                    <li>Akses dibatasi sesuai role</li>
-                </ul>
-            </div>
+            <nav class="center-links">
+                <a href="#fitur">Fitur</a>
+                <a href="#langkah">Langkah Presensi</a>
+                <a href="#keamanan">Keamanan</a>
+            </nav>
 
+            <a href="<?= base_url('login') ?>" class="auth-btn light">Login</a>
         </div>
+    </header>
 
-    </div>
+    <main class="hero-shell" id="fitur">
+        <section class="hero-grid">
+            <article class="hero-main">
+                <h1>Sistem Presensi Digital berbasis Role dan Verifikasi Identitas</h1>
+                <p>SmartPresence mempermudah presensi harian, menjaga konsistensi data kelas, dan memastikan akses admin serta guru berjalan sesuai hak masing-masing.</p>
+                <div class="hero-actions">
+                    <a class="auth-btn primary" href="<?= base_url('login') ?>">Masuk ke Sistem</a>
+                    <a class="auth-btn light" href="#fitur">Lihat Fitur</a>
+                </div>
+            </article>
 
-</section>
+            <aside class="hero-side">
+                <div id="langkah" class="info-card">
+                    <h3>Langkah Presensi</h3>
+                    <ul>
+                        <li>Guru login sesuai akun masing-masing.</li>
+                        <li>Sistem menampilkan kelas pada jadwal aktif.</li>
+                        <li>Presensi dicatat per siswa secara real-time.</li>
+                        <li>Laporan dapat dicetak sesuai hak akses role.</li>
+                    </ul>
+                </div>
 
+                <div id="keamanan" class="info-card">
+                    <h3>Keamanan Sistem</h3>
+                    <ul>
+                        <li>Akses dibatasi ketat sesuai role admin dan guru.</li>
+                        <li>Data wajah dan RFID terikat ke profil pengguna.</li>
+                        <li>Laporan wali kelas otomatis dibatasi per kelas.</li>
+                        <li>Riwayat presensi tersimpan rapi untuk audit.</li>
+                    </ul>
+                </div>
+            </aside>
+        </section>
+    </main>
 </body>
 </html>

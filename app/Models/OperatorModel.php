@@ -8,5 +8,6 @@ class OperatorModel extends Model
 {
     protected $table = 'operator';
     protected $primaryKey = 'id_admin';
-    protected $allowedFields = ['username','password'];
+    protected $returnType = 'array';
+    protected $allowedFields = ['username', 'password', 'created_at', 'updated_at'];
 }

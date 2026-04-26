@@ -1,82 +1,56 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-    <title>Login - SmartPresence</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="<?= base_url('login.css') ?>">
+    <title>Login - SmartPresence</title>
+    <link rel="stylesheet" href="<?= base_url('auth-theme.css') ?>">
 </head>
-<body>
+<body class="auth-page">
+    <div class="auth-backdrop"></div>
 
-<div class="overlay"></div>
-
-<div class="login-container">
-
-    <div class="login-card">
-        <h2>Welcome Back</h2>
-        <p class="subtitle">Masuk untuk melanjutkan ke sistem presensi</p>
-
-        <!-- ERROR MESSAGE -->
-        <?php if(session()->getFlashdata('error')): ?>
-            <p style="color:red; margin-bottom:15px;">
-                <?= session()->getFlashdata('error') ?>
-            </p>
-        <?php endif; ?>
-
-        <form action="<?= base_url('login') ?>" method="post">
-
-            <!-- EMAIL -->
-            <div class="input-box">
-                <input type="text" name="username" required>
-                <label>Email</label>
+    <header class="site-nav">
+        <div class="site-nav-inner">
+            <div class="brand-mark">
+                <span>Sistem Presensi Sekolah</span>
+                <strong>SmartPresence</strong>
             </div>
+            <a class="auth-btn light" href="<?= base_url('/') ?>">Kembali ke Beranda</a>
+        </div>
+    </header>
 
-            <!-- PASSWORD -->
-            <div class="input-box">
-                <input type="password" name="password" required>
-                <label>Password</label>
-            </div>
+    <main class="login-shell">
+        <section class="login-card">
+            <h2>Masuk ke SmartPresence</h2>
+            <p class="login-subtitle">Gunakan akun admin atau guru yang sudah didaftarkan.</p>
 
-            <!-- CAPTCHA INPUT -->
-            <div class="input-box">
-                <input type="text" name="captcha" required>
-                <label>Masukkan Captcha</label>
-            </div>
+            <?php if (session()->getFlashdata('error')): ?>
+                <div class="alert-error"><?= esc(session()->getFlashdata('error')) ?></div>
+            <?php endif; ?>
 
-            <!-- CAPTCHA NUMBER -->
-            <div style="
-                margin-bottom:15px;
-                font-size:22px;
-                font-weight:bold;
-                letter-spacing:4px;
-                background:#f3f3f3;
-                padding:8px;
-                border-radius:6px;
-                text-align:center;
-            ">
-                <?= $captcha ?>
-            </div>
+            <form action="<?= base_url('login') ?>" method="post">
+                <div class="field-block">
+                    <label for="username">Username</label>
+                    <input id="username" type="text" name="username" value="<?= esc(old('username')) ?>" required>
+                </div>
 
-            <!-- LOGIN BUTTON -->
-            <button type="submit" class="btn-login">
-                Sign In
-            </button>
+                <div class="field-block">
+                    <label for="password">Password</label>
+                    <input id="password" type="password" name="password" required>
+                </div>
 
-            <!-- EXTRA -->
-            <div class="extra">
-                <a href="#">Forgot password?</a>
-            </div>
+                <div class="field-block">
+                    <label for="captcha">Masukkan Captcha</label>
+                    <input id="captcha" type="text" name="captcha" required>
+                </div>
 
-            <!-- REGISTER -->
-            <div class="register">
-                Belum punya akun?
-                <a href="<?= base_url('register') ?>">Register</a>
-            </div>
+                <div class="captcha-box"><?= esc((string) $captcha) ?></div>
 
-        </form>
+                <button type="submit" class="auth-btn primary block">Login</button>
 
-    </div>
-
-</div>
-
+                <p class="helper-text">Akses ke menu dan laporan akan otomatis mengikuti role akun yang Anda gunakan.</p>
+            </form>
+        </section>
+    </main>
 </body>
 </html>
