@@ -44,6 +44,15 @@ class Dashboard extends BaseController
         if ($role === 'guru') {
             $idGuru = (int) session()->get('id_guru');
             $hari = $this->hariIndonesia(date('l'));
+            $kelasJadwal = (new JadwalModel())
+                ->select('kelas')
+                ->where('id_guru', $idGuru)
+                ->where('kelas !=', '')
+                ->findColumn('kelas') ?? [];
+            $kelasWali = (string) session()->get('kelas_wali');
+            $kelasGuru = (int) session()->get('is_wali_kelas') === 1
+                ? $this->mergeKelasList($kelasJadwal, [$kelasWali])
+                : $this->mergeKelasList($kelasJadwal);
 
             $data['stats'] = [
                 'jadwal_hari_ini' => (new JadwalModel())
@@ -54,8 +63,9 @@ class Dashboard extends BaseController
                     ->where('id_guru', $idGuru)
                     ->where('tanggal', date('Y-m-d'))
                     ->countAllResults(),
+                'kelas_diampu' => count($kelasGuru),
                 'is_wali_kelas' => (int) session()->get('is_wali_kelas'),
-                'kelas_wali' => (string) session()->get('kelas_wali'),
+                'kelas_wali' => $kelasWali,
             ];
         }
 

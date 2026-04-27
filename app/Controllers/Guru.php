@@ -2,16 +2,22 @@
 
 namespace App\Controllers;
 
-use App\Models\GuruModel;
+use App\Libraries\LaravelApiClient;
 
 class Guru extends BaseController
 {
+    private $client;
+
+    public function __construct()
+    {
+        $this->client = new LaravelApiClient();
+    }
+
     public function index()
     {
-        $model = new GuruModel();
-
+        $response = $this->client->get('guru');
         return view('data_guru', [
-            'guru' => $model->orderBy('nama', 'ASC')->findAll(),
+            'guru' => $response ?: [],
         ]);
     }
 
@@ -21,15 +27,15 @@ class Guru extends BaseController
             'title' => 'Tambah Guru',
             'action' => base_url('guru/simpan'),
             'guru' => null,
+            'kelasOptions' => $this->getMasterKelasList(),
         ]);
     }
 
     public function edit(int $id)
     {
-        $model = new GuruModel();
-        $guru = $model->find($id);
+        $guru = $this->client->get('guru/' . $id);
 
-        if (! $guru) {
+        if (! $guru || isset($guru['message'])) {
             return redirect()->to('/guru')->with('error', 'Data guru tidak ditemukan.');
         }
 
@@ -37,67 +43,55 @@ class Guru extends BaseController
             'title' => 'Edit Guru',
             'action' => base_url('guru/update/' . $id),
             'guru' => $guru,
+            'kelasOptions' => $this->getMasterKelasList([(string) ($guru['kelas_wali'] ?? '')]),
         ]);
     }
 
     public function simpan()
     {
-        $model = new GuruModel();
         $payload = $this->buildPayload();
         $plainPassword = (string) $this->request->getPost('password');
-
-        if (! $this->validateGuru($payload, null, true)) {
-            return redirect()->back()->withInput()->with('error', implode(' ', $this->validator->getErrors()));
+        
+        if (trim($plainPassword) !== '') {
+            $payload['password'] = password_hash($plainPassword, PASSWORD_DEFAULT);
+        } else {
+            return redirect()->back()->withInput()->with('error', 'Password wajib diisi untuk guru baru.');
         }
 
-        $payload['password'] = password_hash($plainPassword, PASSWORD_DEFAULT);
-        $payload['created_at'] = date('Y-m-d H:i:s');
-        $payload['updated_at'] = date('Y-m-d H:i:s');
+        $response = $this->client->post('guru', $payload);
 
-        $model->insert($payload);
+        if (isset($response['message']) && !isset($response['id_guru'])) {
+            return redirect()->back()->withInput()->with('error', $response['message']);
+        }
 
         return redirect()->to('/guru')->with('success', 'Data guru berhasil ditambahkan.');
     }
 
     public function update(int $id)
     {
-        $model = new GuruModel();
-        $existing = $model->find($id);
-
-        if (! $existing) {
-            return redirect()->to('/guru')->with('error', 'Data guru tidak ditemukan.');
-        }
-
         $payload = $this->buildPayload();
         $plainPassword = trim((string) $this->request->getPost('password'));
-
-        if ($payload['foto_wajah'] === null) {
-            $payload['foto_wajah'] = $existing['foto_wajah'];
-        }
-
-        if (! $this->validateGuru($payload, $id, false)) {
-            return redirect()->back()->withInput()->with('error', implode(' ', $this->validator->getErrors()));
-        }
 
         if ($plainPassword !== '') {
             $payload['password'] = password_hash($plainPassword, PASSWORD_DEFAULT);
         }
 
-        $payload['updated_at'] = date('Y-m-d H:i:s');
-        $model->update($id, $payload);
+        if ($payload['foto_wajah'] === null) {
+            unset($payload['foto_wajah']);
+        }
+
+        $response = $this->client->put('guru/' . $id, $payload);
+
+        if (isset($response['message']) && !isset($response['id_guru'])) {
+            return redirect()->back()->withInput()->with('error', $response['message']);
+        }
 
         return redirect()->to('/guru')->with('success', 'Data guru berhasil diperbarui.');
     }
 
     public function hapus(int $id)
     {
-        $model = new GuruModel();
-
-        if (! $model->find($id)) {
-            return redirect()->to('/guru')->with('error', 'Data guru tidak ditemukan.');
-        }
-
-        $model->delete($id);
+        $this->client->delete('guru/' . $id);
 
         return redirect()->to('/guru')->with('success', 'Data guru berhasil dihapus.');
     }
@@ -117,41 +111,5 @@ class Guru extends BaseController
             'id_rfid' => trim((string) $this->request->getPost('id_rfid')) ?: null,
             'foto_wajah' => $fotoWajah !== '' ? $fotoWajah : null,
         ];
-    }
-
-    private function validateGuru(array $payload, ?int $id, bool $isCreate): bool
-    {
-        $nipRule = 'required|min_length[8]';
-        $usernameRule = 'required|min_length[4]';
-        $rfidRule = 'permit_empty';
-
-        if ($id === null) {
-            $nipRule .= '|is_unique[guru.nip]';
-            $usernameRule .= '|is_unique[guru.username]';
-            $rfidRule .= '|is_unique[guru.id_rfid]';
-        } else {
-            $nipRule .= '|is_unique[guru.nip,id_guru,' . $id . ']';
-            $usernameRule .= '|is_unique[guru.username,id_guru,' . $id . ']';
-            $rfidRule .= '|is_unique[guru.id_rfid,id_guru,' . $id . ']';
-        }
-
-        $rules = [
-            'nama' => 'required|min_length[3]',
-            'nip' => $nipRule,
-            'username' => $usernameRule,
-            'id_rfid' => $rfidRule,
-            'kelas_wali' => $payload['is_wali_kelas'] === 1 ? 'required|min_length[2]' : 'permit_empty|min_length[2]',
-        ];
-
-        if ($isCreate) {
-            $rules['password'] = 'required|min_length[6]';
-        } else {
-            $rules['password'] = 'permit_empty|min_length[6]';
-        }
-
-        $dataToValidate = $payload;
-        $dataToValidate['password'] = trim((string) $this->request->getPost('password'));
-
-        return $this->validateData($dataToValidate, $rules);
     }
 }

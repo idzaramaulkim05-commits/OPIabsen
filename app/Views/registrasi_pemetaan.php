@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="<?= base_url('app-theme.css') ?>">
 </head>
 <body class="app-page">
+    <?php $kelasSiswaSelected = (string) old('kelas_siswa', ''); ?>
     <header class="app-topbar">
         <div class="app-topbar-inner">
             <div class="brand-stack">
@@ -28,6 +29,7 @@
             <a href="<?= base_url('admin/registrasi') ?>">Registrasi Wajah & RFID</a>
             <a class="primary" href="<?= base_url('admin/registrasi/pemetaan') ?>">Pemetaan Registrasi</a>
             <a href="<?= base_url('jadwal') ?>">Jadwal</a>
+            <a href="<?= base_url('master-data/kelas') ?>">Master Data Kelas</a>
         </div>
 
         <?php if (session()->getFlashdata('error')): ?>
@@ -95,7 +97,14 @@
 
                     <div class="field">
                         <label for="kelas_siswa">Set/Ubah Kelas Siswa (Opsional)</label>
-                        <input id="kelas_siswa" type="text" name="kelas_siswa" value="<?= esc(old('kelas_siswa', '')) ?>" placeholder="Contoh: XI-RPL-1">
+                        <select id="kelas_siswa" name="kelas_siswa">
+                            <option value="">Tetap kelas saat ini</option>
+                            <?php foreach ($kelasList as $kelas): ?>
+                                <option value="<?= esc((string) $kelas) ?>" <?= $kelasSiswaSelected === (string) $kelas ? 'selected' : '' ?>>
+                                    <?= esc((string) $kelas) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                 </div>
 

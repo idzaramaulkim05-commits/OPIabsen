@@ -2,10 +2,17 @@
 
 namespace App\Controllers;
 
-use App\Models\SiswaModel;
+use App\Libraries\LaravelApiClient;
 
 class Siswa extends BaseController
 {
+    private $client;
+
+    public function __construct()
+    {
+        $this->client = new LaravelApiClient();
+    }
+
     public function index()
     {
         return $this->data();
@@ -13,8 +20,8 @@ class Siswa extends BaseController
 
     public function data()
     {
-        $model = new SiswaModel();
-        $data['siswa'] = $model->orderBy('nama', 'ASC')->findAll();
+        $response = $this->client->get('siswa');
+        $data['siswa'] = $response ?: [];
 
         return view('data_siswa', $data);
     }
@@ -25,15 +32,15 @@ class Siswa extends BaseController
             'title' => 'Tambah Siswa',
             'action' => base_url('siswa/simpan'),
             'siswa' => null,
+            'kelasOptions' => $this->getMasterKelasList(),
         ]);
     }
 
     public function edit(int $id)
     {
-        $model = new SiswaModel();
-        $siswa = $model->find($id);
+        $siswa = $this->client->get('siswa/' . $id);
 
-        if (! $siswa) {
+        if (! $siswa || isset($siswa['message'])) {
             return redirect()->to('/siswa/data')->with('error', 'Data siswa tidak ditemukan.');
         }
 
@@ -41,59 +48,44 @@ class Siswa extends BaseController
             'title' => 'Edit Siswa',
             'action' => base_url('siswa/update/' . $id),
             'siswa' => $siswa,
+            'kelasOptions' => $this->getMasterKelasList([(string) ($siswa['kelas'] ?? '')]),
         ]);
     }
 
     public function simpan()
     {
-        $model = new SiswaModel();
         $payload = $this->buildPayload();
 
-        if (! $this->isValidSiswa($payload)) {
-            return redirect()->back()->withInput()->with('error', implode(' ', $this->validator->getErrors()));
+        $response = $this->client->post('siswa', $payload);
+
+        if (isset($response['message']) && !isset($response['id'])) {
+            return redirect()->back()->withInput()->with('error', $response['message']);
         }
-
-        $payload['created_at'] = date('Y-m-d H:i:s');
-        $payload['updated_at'] = date('Y-m-d H:i:s');
-
-        $model->insert($payload);
 
         return redirect()->to('/siswa/data')->with('success', 'Data siswa berhasil ditambahkan.');
     }
 
     public function update(int $id)
     {
-        $model = new SiswaModel();
-        $existing = $model->find($id);
-
-        if (! $existing) {
-            return redirect()->to('/siswa/data')->with('error', 'Data siswa tidak ditemukan.');
-        }
-
         $payload = $this->buildPayload();
+        
+        // Prevent removing existing face
         if ($payload['foto_wajah'] === null) {
-            $payload['foto_wajah'] = $existing['foto_wajah'];
+            unset($payload['foto_wajah']);
         }
 
-        if (! $this->isValidSiswa($payload, $id)) {
-            return redirect()->back()->withInput()->with('error', implode(' ', $this->validator->getErrors()));
-        }
+        $response = $this->client->put('siswa/' . $id, $payload);
 
-        $payload['updated_at'] = date('Y-m-d H:i:s');
-        $model->update($id, $payload);
+        if (isset($response['message']) && !isset($response['id'])) {
+            return redirect()->back()->withInput()->with('error', $response['message']);
+        }
 
         return redirect()->to('/siswa/data')->with('success', 'Data siswa berhasil diperbarui.');
     }
 
     public function hapus(int $id)
     {
-        $model = new SiswaModel();
-
-        if (! $model->find($id)) {
-            return redirect()->to('/siswa/data')->with('error', 'Data siswa tidak ditemukan.');
-        }
-
-        $model->delete($id);
+        $this->client->delete('siswa/' . $id);
 
         return redirect()->to('/siswa/data')->with('success', 'Data siswa berhasil dihapus.');
     }
@@ -113,27 +105,5 @@ class Siswa extends BaseController
             'id_rfid' => trim((string) $this->request->getPost('id_rfid')) ?: null,
             'foto_wajah' => $fotoWajah !== '' ? $fotoWajah : null,
         ];
-    }
-
-    private function isValidSiswa(array $payload, ?int $id = null): bool
-    {
-        $noIndukRule = 'permit_empty|min_length[3]';
-        $rfidRule = 'permit_empty';
-
-        if ($id === null) {
-            $noIndukRule .= '|is_unique[siswa.no_induk]';
-            $rfidRule .= '|is_unique[siswa.id_rfid]';
-        } else {
-            $noIndukRule .= '|is_unique[siswa.no_induk,id,' . $id . ']';
-            $rfidRule .= '|is_unique[siswa.id_rfid,id,' . $id . ']';
-        }
-
-        return $this->validateData($payload, [
-            'nama' => 'required|min_length[3]',
-            'no_induk' => $noIndukRule,
-            'kelas' => 'permit_empty|min_length[2]',
-            'alamat' => 'permit_empty|max_length[255]',
-            'id_rfid' => $rfidRule,
-        ]);
     }
 }

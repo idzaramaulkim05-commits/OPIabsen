@@ -57,6 +57,12 @@ $routes->group('', ['filter' => 'role:admin'], static function ($routes) {
 	$routes->get('jadwal/edit/(:num)', 'Jadwal::edit/$1');
 	$routes->post('jadwal/update/(:num)', 'Jadwal::update/$1');
 	$routes->get('jadwal/hapus/(:num)', 'Jadwal::hapus/$1');
+
+	// Master data (kelas)
+	$routes->get('master-data/kelas', 'MasterKelas::index');
+	$routes->post('master-data/kelas/simpan', 'MasterKelas::simpan');
+	$routes->post('master-data/kelas/update/(:num)', 'MasterKelas::update/$1');
+	$routes->get('master-data/kelas/hapus/(:num)', 'MasterKelas::hapus/$1');
 });
 
 // Guru module
@@ -65,16 +71,11 @@ $routes->group('', ['filter' => 'role:guru'], static function ($routes) {
 	$routes->post('presensi/simpan', 'Presensi::simpan');
 });
 
-// Laporan dapat diakses guru wali kelas atau admin
+// Laporan dapat diakses guru dan admin
 $routes->group('', ['filter' => 'role:admin,guru'], static function ($routes) {
 	$routes->get('presensi/riwayat', 'Presensi::riwayat');
 	$routes->get('presensi/cetak', 'Presensi::cetak');
 });
 
-// API untuk device IoT OrangePi (RFID + Face)
-$routes->get('api/iot/health', 'Iot::health');
-$routes->post('api/iot/scan', 'Iot::scan');
-$routes->post('api/iot/device/heartbeat', 'Iot::deviceHeartbeat');
-$routes->get('api/iot/device/command', 'Iot::deviceCommand');
-$routes->post('api/iot/register/capture', 'Iot::registerCapture');
+
 

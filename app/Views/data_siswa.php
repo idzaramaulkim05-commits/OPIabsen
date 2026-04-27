@@ -27,6 +27,7 @@
             <a href="<?= base_url('guru') ?>">Data Guru</a>
             <a href="<?= base_url('admin/registrasi') ?>">Registrasi Wajah & RFID</a>
             <a href="<?= base_url('jadwal') ?>">Jadwal</a>
+            <a href="<?= base_url('master-data/kelas') ?>">Master Data Kelas</a>
             <a class="primary" href="<?= base_url('siswa/tambah') ?>">Tambah Siswa</a>
         </div>
 

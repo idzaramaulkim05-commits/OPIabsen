@@ -18,6 +18,12 @@ class IotDevice extends BaseConfig
     public bool $autoRecordSiswaAttendance = true;
 
     /**
+     * Jika true, mode absensi wajib kombinasi RFID + wajah.
+     * Request scan hanya RFID diperlakukan sebagai precheck kartu (tanpa simpan presensi).
+     */
+    public bool $requireDualFactorAttendance = true;
+
+    /**
      * Batas waktu (detik) device dianggap online sejak heartbeat terakhir.
      */
     public int $deviceOnlineWindowSec = 45;

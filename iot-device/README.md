@@ -49,16 +49,18 @@ python device_service.py
 
 Perilaku utama mode absensi:
 - Kamera selalu standby (tidak menunggu ON REGIS).
-- Saat wajah terdeteksi:
-  - mode `either`: boleh RFID saja atau wajah saja.
-  - mode `both`: wajib RFID + wajah.
+- Wajib kombinasi `RFID + wajah` (2 faktor):
+  - kartu RFID harus valid/terdaftar dulu
+  - setelah kartu valid, device mencoba verifikasi wajah sampai maksimal 3 kali
+  - jika 3 kali gagal, presensi dinyatakan gagal
 - LCD dan LED memberi feedback:
   - sukses: `Selamat Absen` + LED hijau
   - gagal/unknown: `Gagal Absen` + LED merah
 
 Pengaturan metode absensi di `.env`:
-- `ATTENDANCE_AUTH_MODE=either` (default)
-- opsi lain: `rfid_only`, `face_only`, `both`
+- `ATTENDANCE_AUTH_MODE=both` (wajib 2 faktor)
+- `FACE_RETRY_MAX_ATTEMPTS=3`
+- `RFID_FACE_WAIT_TIMEOUT_SEC=20`
 
 ## Mode RFID
 - `RFID_MODE=softspi` untuk RC522 software SPI via `gpiod` (disarankan untuk OrangePi)

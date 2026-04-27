@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="<?= base_url('app-theme.css') ?>">
 </head>
 <body class="app-page">
+    <?php $selectedKelas = (string) old('kelas', $siswa['kelas'] ?? ''); ?>
     <header class="app-topbar">
         <div class="app-topbar-inner">
             <div class="brand-stack">
@@ -39,7 +40,15 @@
 
                 <div class="field">
                     <label for="kelas">Kelas</label>
-                    <input id="kelas" type="text" name="kelas" value="<?= esc(old('kelas', $siswa['kelas'] ?? '')) ?>" placeholder="Opsional, contoh: XI-RPL-1">
+                    <select id="kelas" name="kelas">
+                        <option value="">Belum ditentukan</option>
+                        <?php foreach (($kelasOptions ?? []) as $kelas): ?>
+                            <option value="<?= esc((string) $kelas) ?>" <?= $selectedKelas === (string) $kelas ? 'selected' : '' ?>>
+                                <?= esc((string) $kelas) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="helper">Daftar kelas diatur dari menu Master Data Kelas.</div>
                 </div>
 
                 <div class="field">

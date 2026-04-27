@@ -36,6 +36,7 @@
                 <a href="<?= base_url('siswa/data') ?>">Kelola Siswa</a>
                 <a href="<?= base_url('admin/registrasi') ?>">Registrasi Wajah & RFID</a>
                 <a href="<?= base_url('jadwal') ?>">Kelola Jadwal</a>
+                <a href="<?= base_url('master-data/kelas') ?>">Master Data Kelas</a>
                 <a class="secondary" href="<?= base_url('presensi/riwayat') ?>">Laporan Presensi</a>
             </div>
 
@@ -130,11 +131,7 @@
         <?php if ($role === 'guru'): ?>
             <div class="nav-pills">
                 <a class="primary" href="<?= base_url('presensi') ?>">Presensi Kelas Aktif</a>
-                <?php if ((int) ($stats['is_wali_kelas'] ?? 0) === 1): ?>
-                    <a class="secondary" href="<?= base_url('presensi/riwayat') ?>">Laporan Presensi</a>
-                <?php else: ?>
-                    <span class="disabled">Laporan Khusus Wali Kelas</span>
-                <?php endif; ?>
+                <a class="secondary" href="<?= base_url('presensi/riwayat') ?>">Laporan Presensi</a>
             </div>
 
             <section class="stat-grid">
@@ -147,18 +144,18 @@
                     <div class="label">Presensi Dicatat</div>
                 </article>
                 <article class="stat-card">
-                    <div class="value"><?= (int) ($stats['is_wali_kelas'] ?? 0) === 1 ? 'Ya' : 'Tidak' ?></div>
-                    <div class="label">Status Wali Kelas</div>
+                    <div class="value"><?= esc((string) ($stats['kelas_diampu'] ?? 0)) ?></div>
+                    <div class="label">Total Kelas Diampu</div>
                 </article>
                 <article class="stat-card">
-                    <div class="value"><?= esc((string) ($stats['kelas_wali'] ?? '-')) ?></div>
+                    <div class="value"><?= esc((string) (($stats['kelas_wali'] ?? '') !== '' ? $stats['kelas_wali'] : '-')) ?></div>
                     <div class="label">Kelas Wali</div>
                 </article>
             </section>
 
             <section class="panel">
                 <h3>Hak Akses Guru</h3>
-                <p>Guru hanya dapat mengisi presensi pada kelas aktif saat jam mengajar berjalan. Laporan dan cetak dibatasi untuk guru wali kelas.</p>
+                <p>Guru hanya dapat mengisi dan melihat riwayat presensi pada kelas yang diampu sesuai jadwal mengajar yang ditetapkan admin.</p>
             </section>
         <?php endif; ?>
     </main>

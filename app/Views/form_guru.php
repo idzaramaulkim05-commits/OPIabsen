@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="<?= base_url('app-theme.css') ?>">
 </head>
 <body class="app-page">
+    <?php $selectedKelasWali = (string) old('kelas_wali', $guru['kelas_wali'] ?? ''); ?>
     <header class="app-topbar">
         <div class="app-topbar-inner">
             <div class="brand-stack">
@@ -59,7 +60,14 @@
 
                 <div class="field">
                     <label for="kelas_wali">Kelas Wali</label>
-                    <input id="kelas_wali" type="text" name="kelas_wali" value="<?= esc(old('kelas_wali', $guru['kelas_wali'] ?? '')) ?>" placeholder="Contoh: X-IPA-1">
+                    <select id="kelas_wali" name="kelas_wali">
+                        <option value="">Pilih Kelas Wali</option>
+                        <?php foreach (($kelasOptions ?? []) as $kelas): ?>
+                            <option value="<?= esc((string) $kelas) ?>" <?= $selectedKelasWali === (string) $kelas ? 'selected' : '' ?>>
+                                <?= esc((string) $kelas) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
 
                 <div class="field">

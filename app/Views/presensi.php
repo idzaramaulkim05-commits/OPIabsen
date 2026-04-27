@@ -23,11 +23,7 @@
     <main class="app-shell">
         <div class="nav-pills">
             <a href="<?= base_url('dashboard') ?>">Dashboard</a>
-            <?php if ((int) session()->get('is_wali_kelas') === 1): ?>
-                <a class="secondary" href="<?= base_url('presensi/riwayat') ?>">Laporan Presensi</a>
-            <?php else: ?>
-                <span class="disabled">Laporan khusus wali kelas</span>
-            <?php endif; ?>
+            <a class="secondary" href="<?= base_url('presensi/riwayat') ?>">Laporan Presensi</a>
         </div>
 
         <?php if (session()->getFlashdata('error')): ?>

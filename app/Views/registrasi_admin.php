@@ -87,6 +87,7 @@ $sessionStatus = strtolower((string) ($activeSession['status'] ?? ''));
             <a href="<?= base_url('guru') ?>">Data Guru</a>
             <a class="primary" href="<?= base_url('admin/registrasi') ?>">Registrasi Wajah & RFID</a>
             <a href="<?= base_url('jadwal') ?>">Jadwal</a>
+            <a href="<?= base_url('master-data/kelas') ?>">Master Data Kelas</a>
         </div>
 
         <?php if (session()->getFlashdata('error')): ?>
@@ -196,9 +197,9 @@ $sessionStatus = strtolower((string) ($activeSession['status'] ?? ''));
                 </div>
 
                 <?php if (in_array($sessionStatus, ['waiting_device', 'captured'], true)): ?>
-                    <form action="<?= base_url('admin/registrasi/sesi/' . (int) $activeSession['id_session'] . '/batal') ?>" method="post" style="margin-top: 12px;">
+                    <form id="close-regis-form" action="<?= base_url('admin/registrasi/sesi/' . (int) $activeSession['id_session'] . '/batal') ?>" method="post" style="margin-top: 12px;">
                         <?= csrf_field() ?>
-                        <button class="btn btn-muted" type="submit" onclick="return confirm('Batalkan sesi registrasi ini?')">Batalkan Sesi</button>
+                        <button class="btn btn-muted" type="submit" onclick="return confirm('Tutup mode registrasi untuk device ini dan kembali ke mode absen?')">Close Regis</button>
                     </form>
                 <?php endif; ?>
             <?php endif; ?>
@@ -301,6 +302,7 @@ $sessionStatus = strtolower((string) ($activeSession['status'] ?? ''));
         const facePreview = document.getElementById('face-preview');
         const facePreviewEmpty = document.getElementById('face-preview-empty');
         const rfidField = document.getElementById('id_rfid');
+        const registerFormEl = document.getElementById('register-direct-form');
 
         function applyTargetVisibility() {
             const type = targetTypeEl.value === 'guru' ? 'guru' : 'siswa';
@@ -342,6 +344,60 @@ $sessionStatus = strtolower((string) ($activeSession['status'] ?? ''));
         syncFacePreview();
 
         const sessionId = <?= $sessionId ?>;
+        const autoCloseStatuses = new Set(['waiting_device', 'captured']);
+        let latestSessionStatus = <?= json_encode($sessionStatus) ?>;
+        let autoCloseSent = false;
+        let skipAutoClose = false;
+
+        if (registerFormEl) {
+            registerFormEl.addEventListener('submit', () => {
+                // Simpan registrasi adalah operasi normal, jangan auto-close session.
+                skipAutoClose = true;
+            });
+        }
+
+        const closeRegisForm = document.getElementById('close-regis-form');
+        if (closeRegisForm) {
+            closeRegisForm.addEventListener('submit', () => {
+                // Admin menutup manual dari tombol, tidak perlu auto-close lagi saat unload.
+                skipAutoClose = true;
+            });
+        }
+
+        function closeRegisterSessionOnExit(reason) {
+            if (skipAutoClose || autoCloseSent || sessionId <= 0) {
+                return;
+            }
+            if (!autoCloseStatuses.has((latestSessionStatus || '').toLowerCase())) {
+                return;
+            }
+
+            autoCloseSent = true;
+            const closeUrl = "<?= base_url('admin/registrasi/sesi') ?>/" + String(sessionId) + "/batal";
+            const payload = new URLSearchParams();
+            payload.set('auto_close', '1');
+            payload.set('reason', reason || 'leave_page');
+
+            if (navigator.sendBeacon) {
+                const sent = navigator.sendBeacon(closeUrl, payload);
+                if (sent) {
+                    return;
+                }
+            }
+
+            fetch(closeUrl, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: payload.toString(),
+                keepalive: true,
+                credentials: 'same-origin',
+            }).catch(() => {});
+        }
+
+        // Auto close session saat admin keluar dari halaman registrasi.
+        window.addEventListener('beforeunload', () => closeRegisterSessionOnExit('beforeunload'));
+        window.addEventListener('pagehide', () => closeRegisterSessionOnExit('pagehide'));
+
         if (sessionId > 0) {
             const statusChip = document.getElementById('session-status-chip');
             const sessionRfidText = document.getElementById('session-rfid-text');
@@ -381,6 +437,7 @@ $sessionStatus = strtolower((string) ($activeSession['status'] ?? ''));
 
                     const data = payload.data;
                     const status = (data.status || '').toLowerCase();
+                    latestSessionStatus = status;
                     decorateStatusChip(status);
 
                     const capturedRfid = (data.captured_rfid || '').trim();

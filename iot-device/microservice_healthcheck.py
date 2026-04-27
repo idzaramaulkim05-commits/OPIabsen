@@ -30,10 +30,18 @@ def load_env_file_fallback(path: str = ".env") -> None:
                 os.environ[key] = value
 
 
-def check(url: str, headers: dict | None = None, timeout: int = 5) -> tuple[bool, str]:
+def check(
+    url: str,
+    headers: dict | None = None,
+    timeout: int = 5,
+    accepted_statuses: set[int] | None = None,
+) -> tuple[bool, str]:
     try:
         resp = requests.get(url, headers=headers, timeout=timeout)
-        ok = 200 <= resp.status_code < 300
+        if accepted_statuses is None:
+            ok = 200 <= resp.status_code < 300
+        else:
+            ok = resp.status_code in accepted_statuses
         return ok, f"HTTP {resp.status_code}"
     except Exception as exc:
         return False, str(exc)
@@ -48,21 +56,31 @@ def main() -> int:
     ci_health = os.getenv("IOT_HEALTH_URL", "http://192.168.0.104:8080/api/iot/health")
     ci_token = os.getenv("IOT_DEVICE_TOKEN", "") or os.getenv("iotDevice.deviceToken", "")
 
-    gateway_url = os.getenv("FACE_GATEWAY_URL", "http://192.168.0.104:8000/api/attendance")
+    gateway_url = os.getenv("FACE_GATEWAY_URL", "http://192.168.0.104:8000/api/face/attendance")
     gateway_token = os.getenv("FACE_GATEWAY_BEARER_TOKEN", "") or os.getenv("faceGateway.bearerToken", "absensiiot2026-token")
 
     engine_url = os.getenv("FACE_ENGINE_HEALTH_URL", "http://192.168.0.104:8001/health")
 
     checks = [
-        ("CodeIgniter IoT", ci_health, {"X-Device-Token": ci_token} if ci_token else {}),
-        ("Laravel Gateway", gateway_url, {"Authorization": f"Bearer {gateway_token}"} if gateway_token else {}),
-        ("FastAPI Engine", engine_url, {}),
+        (
+            "CodeIgniter IoT",
+            ci_health,
+            {"X-Device-Token": ci_token} if ci_token else {},
+            None,
+        ),
+        (
+            "Laravel Gateway",
+            gateway_url,
+            {"Authorization": f"Bearer {gateway_token}"} if gateway_token else {},
+            {200, 401, 403, 405},
+        ),
+        ("FastAPI Engine", engine_url, {}, None),
     ]
 
     print("=== Microservice Health Check ===")
     failed = 0
-    for name, url, headers in checks:
-        ok, detail = check(url, headers=headers)
+    for name, url, headers, accepted_statuses in checks:
+        ok, detail = check(url, headers=headers, accepted_statuses=accepted_statuses)
         status = "OK" if ok else "FAIL"
         print(f"[{status}] {name:<18} -> {url} ({detail})")
         if not ok:

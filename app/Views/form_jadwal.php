@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="<?= base_url('app-theme.css') ?>">
 </head>
 <body class="app-page">
+    <?php $selectedKelas = (string) old('kelas', $jadwal['kelas'] ?? ''); ?>
     <header class="app-topbar">
         <div class="app-topbar-inner">
             <div class="brand-stack">
@@ -41,7 +42,14 @@
 
                 <div class="field">
                     <label for="kelas">Kelas</label>
-                    <input id="kelas" type="text" name="kelas" value="<?= esc(old('kelas', $jadwal['kelas'] ?? '')) ?>" required>
+                    <select id="kelas" name="kelas" required>
+                        <option value="">Pilih Kelas</option>
+                        <?php foreach (($kelasOptions ?? []) as $kelas): ?>
+                            <option value="<?= esc((string) $kelas) ?>" <?= $selectedKelas === (string) $kelas ? 'selected' : '' ?>>
+                                <?= esc((string) $kelas) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
 
                 <div class="field">

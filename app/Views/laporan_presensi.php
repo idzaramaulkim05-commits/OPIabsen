@@ -7,6 +7,11 @@
     <link rel="stylesheet" href="<?= base_url('app-theme.css') ?>">
 </head>
 <body class="app-page">
+    <?php
+    $kelasOptions = is_array($kelasOptions ?? null) ? $kelasOptions : [];
+    $guruTanpaKelas = (bool) ($guruTanpaKelas ?? false);
+    $scopeInfo = trim((string) ($scopeInfo ?? ''));
+    ?>
     <header class="app-topbar">
         <div class="app-topbar-inner">
             <div class="brand-stack">
@@ -26,10 +31,17 @@
             <?php if ($role === 'admin'): ?>
                 <a href="<?= base_url('siswa/data') ?>">Data Siswa</a>
                 <a href="<?= base_url('guru') ?>">Data Guru</a>
+                <a href="<?= base_url('master-data/kelas') ?>">Master Data Kelas</a>
             <?php else: ?>
                 <a href="<?= base_url('presensi') ?>">Presensi Aktif</a>
             <?php endif; ?>
         </div>
+
+        <?php if ($scopeInfo !== ''): ?>
+            <section class="panel">
+                <p><?= esc($scopeInfo) ?></p>
+            </section>
+        <?php endif; ?>
 
         <section class="panel">
             <form class="filter-grid" action="<?= base_url('presensi/riwayat') ?>" method="get">
@@ -45,7 +57,16 @@
 
                 <div class="field">
                     <label for="kelas">Kelas</label>
-                    <input id="kelas" type="text" name="kelas" value="<?= esc($kelasFilter) ?>" <?= $role === 'guru' ? 'readonly' : '' ?> placeholder="Kosong = semua kelas">
+                    <select id="kelas" name="kelas" <?= $guruTanpaKelas ? 'disabled' : '' ?>>
+                        <option value="">
+                            <?= $role === 'guru' ? 'Semua kelas yang diampu' : 'Semua kelas' ?>
+                        </option>
+                        <?php foreach ($kelasOptions as $kelas): ?>
+                            <option value="<?= esc((string) $kelas) ?>" <?= $kelasFilter === (string) $kelas ? 'selected' : '' ?>>
+                                <?= esc((string) $kelas) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
 
                 <div class="filter-actions">
@@ -54,6 +75,12 @@
                 </div>
             </form>
         </section>
+
+        <?php if ($guruTanpaKelas): ?>
+            <section class="panel">
+                <p>Belum ada kelas yang ditetapkan untuk akun guru ini. Silakan minta admin menambahkan jadwal mengajar terlebih dahulu.</p>
+            </section>
+        <?php endif; ?>
 
         <section class="panel">
             <div class="table-wrap">
