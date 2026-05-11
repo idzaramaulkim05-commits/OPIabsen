@@ -2,7 +2,9 @@
 
 namespace App\Controllers;
 
+use App\Libraries\FaceGatewayClient;
 use App\Libraries\LaravelApiClient;
+use RuntimeException;
 
 class Siswa extends BaseController
 {
@@ -24,6 +26,25 @@ class Siswa extends BaseController
         $data['siswa'] = $response ?: [];
 
         return view('data_siswa', $data);
+    }
+
+    public function landmark(int $id)
+    {
+        $gateway = new FaceGatewayClient();
+        try {
+            $result = $gateway->fetchLandmark('siswa', $id);
+        } catch (RuntimeException $exception) {
+            return $this->response->setStatusCode(422)->setJSON([
+                'status' => 'error',
+                'message' => $exception->getMessage(),
+            ]);
+        }
+
+        return $this->response->setJSON([
+            'status' => (string) ($result['status'] ?? ($result['found'] ? 'ok' : 'empty')),
+            'message' => $result['message'],
+            'data' => $result['data'],
+        ]);
     }
 
     public function tambah()

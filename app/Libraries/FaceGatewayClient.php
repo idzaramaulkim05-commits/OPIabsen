@@ -53,6 +53,126 @@ class FaceGatewayClient
         ]);
     }
 
+    public function fetchLandmark(string $userType, int $userId): array
+    {
+        if (! in_array($userType, ['siswa', 'guru'], true) || $userId <= 0) {
+            throw new RuntimeException('Parameter landmark tidak valid.');
+        }
+
+        $baseURL = rtrim((string) $this->config->baseURL, '/');
+        $token = trim((string) $this->config->bearerToken);
+        if ($baseURL === '' || $token === '') {
+            throw new RuntimeException('Konfigurasi Face Gateway belum lengkap.');
+        }
+
+        try {
+            $client = service('curlrequest', [
+                'timeout' => $this->config->timeout,
+                'http_errors' => false,
+            ]);
+            $response = $client->get($baseURL . '/face/landmark', [
+                'headers' => [
+                    'Accept' => 'application/json',
+                    'Authorization' => 'Bearer ' . $token,
+                ],
+                'query' => [
+                    'user_type' => $userType,
+                    'user_id' => $userId,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            throw new RuntimeException('Gagal mengambil landmark wajah: ' . $e->getMessage(), 0, $e);
+        }
+
+        $statusCode = $response->getStatusCode();
+        $payload = json_decode((string) $response->getBody(), true);
+        if (! is_array($payload)) {
+            return [
+                'status' => 'error',
+                'message' => 'Respons landmark wajah tidak valid.',
+                'data' => null,
+            ];
+        }
+
+        if ($statusCode < 200 || $statusCode >= 300) {
+            return [
+                'status' => 'error',
+                'message' => (string) ($payload['message'] ?? 'Gagal mengambil landmark wajah.'),
+                'data' => $payload['data'] ?? null,
+            ];
+        }
+
+        $data = is_array($payload['data'] ?? null) ? $payload['data'] : null;
+        $hasLandmark = (bool) (($data['has_landmark'] ?? false) === true);
+        $landmarkStatus = trim((string) ($data['landmark_status'] ?? ''));
+        if ($landmarkStatus === '') {
+            $landmarkStatus = $hasLandmark ? 'valid' : 'missing';
+        }
+        if (is_array($data)) {
+            $data = $this->normalizeImageUrlField($data, 'vector_image_url');
+            $data = $this->normalizeImageUrlField($data, 'overlay_image_url');
+        }
+        $status = $hasLandmark ? 'ok' : 'empty';
+        if ($landmarkStatus === 'invalid') {
+            $status = 'invalid';
+        }
+
+        return [
+            'status' => $status,
+            'found' => $hasLandmark,
+            'message' => (string) ($payload['message'] ?? 'OK'),
+            'data' => $data,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @return array<string,mixed>
+     */
+    private function normalizeImageUrlField(array $data, string $field): array
+    {
+        $raw = trim((string) ($data[$field] ?? ''));
+        if ($raw === '' || str_starts_with($raw, 'data:image/')) {
+            return $data;
+        }
+
+        $fetchUrl = $raw;
+        if (str_starts_with($raw, '/')) {
+            $base = rtrim((string) $this->config->baseURL, '/');
+            $parts = parse_url($base);
+            $scheme = (string) ($parts['scheme'] ?? 'http');
+            $host = (string) ($parts['host'] ?? '');
+            $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
+            if ($host !== '') {
+                $fetchUrl = $scheme . '://' . $host . $port . $raw;
+            }
+        }
+
+        try {
+            $client = service('curlrequest', [
+                'timeout' => $this->config->timeout,
+                'http_errors' => false,
+            ]);
+            $response = $client->get($fetchUrl);
+            if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
+                return $data;
+            }
+            $bytes = (string) $response->getBody();
+            if ($bytes === '') {
+                return $data;
+            }
+            $contentType = (string) $response->getHeaderLine('Content-Type');
+            if ($contentType === '') {
+                $contentType = 'image/svg+xml';
+            }
+            $data[$field] = 'data:' . $contentType . ';base64,' . base64_encode($bytes);
+        } catch (\Throwable) {
+            // keep original url
+        }
+
+        return $data;
+    }
+
     private function registerFace(int $employeeId, string $employeeName, string $imageBase64): array
     {
         $image = $this->decodeImage($imageBase64);

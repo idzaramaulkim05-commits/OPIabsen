@@ -1,77 +1,75 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kelola Akun Admin</title>
-    <link rel="stylesheet" href="<?= base_url('app-theme.css') ?>">
-</head>
-<body class="app-page">
-    <header class="app-topbar">
-        <div class="app-topbar-inner">
-            <div class="brand-stack">
-                <span class="brand-kicker">SmartPresence</span>
-                <h1 class="brand-title">Kelola Akun Admin</h1>
-            </div>
-            <div class="topbar-meta">
-                <span class="user-pill"><?= esc((string) (session()->get('nama') ?: session()->get('username'))) ?></span>
-                <a class="btn btn-ghost" href="<?= base_url('logout') ?>">Logout</a>
-            </div>
-        </div>
-    </header>
+<?= view('partials/app_start', [
+    'title' => 'Kelola Akun',
+    'activeNav' => 'akun',
+]) ?>
 
-    <main class="app-shell">
-        <div class="nav-pills">
-            <a href="<?= base_url('dashboard') ?>">Dashboard</a>
-            <a href="<?= base_url('guru') ?>">Data Guru</a>
-            <a href="<?= base_url('siswa/data') ?>">Data Siswa</a>
-            <a href="<?= base_url('admin/registrasi') ?>">Registrasi Wajah & RFID</a>
-            <a href="<?= base_url('jadwal') ?>">Jadwal</a>
-            <a href="<?= base_url('master-data/kelas') ?>">Master Data Kelas</a>
-            <a class="primary" href="<?= base_url('admin/akun/tambah') ?>">Tambah Akun Admin</a>
-        </div>
+<div class="page-toolbar">
+    <div class="page-toolbar-title">
+        <h2>Akun</h2>
+        <p>Kelola akun login admin dan guru.</p>
+    </div>
+    <a class="btn btn-primary" href="<?= base_url('admin/akun/tambah') ?>">Tambah Akun</a>
+</div>
 
-        <?php if (session()->getFlashdata('error')): ?>
-            <div class="flash error"><?= esc(session()->getFlashdata('error')) ?></div>
-        <?php endif; ?>
-
-        <?php if (session()->getFlashdata('success')): ?>
-            <div class="flash success"><?= esc(session()->getFlashdata('success')) ?></div>
-        <?php endif; ?>
-
-        <section class="panel">
-            <div class="table-wrap">
-                <table class="data-table">
-                    <thead>
+<section class="panel">
+    <div class="table-wrap">
+        <table class="data-table compact">
+            <thead>
+                <tr>
+                    <th>Role</th>
+                    <th>ID</th>
+                    <th>Nama</th>
+                    <th>Username</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (! empty($akun)): ?>
+                    <?php foreach ($akun as $row): ?>
                         <tr>
-                            <th>ID</th>
-                            <th>Username</th>
-                            <th>Aksi</th>
+                            <td><?= esc(ucfirst((string) ($row['role'] ?? '-'))) ?></td>
+                            <td><?= esc((string) ($row['id'] ?? '-')) ?></td>
+                            <td><?= esc((string) ($row['display_name'] ?? '-')) ?></td>
+                            <td><?= esc((string) ($row['username'] ?? '-')) ?></td>
+                            <td>
+                                <div class="actions">
+                                    <a href="<?= base_url('admin/akun/edit/' . $row['role'] . '/' . $row['id']) ?>">Edit</a>
+                                    <?php if (($row['role'] ?? '') === 'guru'): ?>
+                                        <form action="<?= base_url('admin/akun/hapus/guru/' . $row['id']) ?>" method="post" class="inline-form" onsubmit="return confirmDeleteGuru(this)">
+                                            <input type="hidden" name="delete_guru_data" value="">
+                                            <button type="submit" class="link-danger">Hapus</button>
+                                        </form>
+                                    <?php else: ?>
+                                        <form action="<?= base_url('admin/akun/hapus/admin/' . $row['id']) ?>" method="post" class="inline-form" onsubmit="return confirm('Yakin hapus akun admin ini?')">
+                                            <button type="submit" class="link-danger">Hapus</button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (! empty($akun)): ?>
-                            <?php foreach ($akun as $row): ?>
-                                <tr>
-                                    <td><?= esc((string) $row['id_admin']) ?></td>
-                                    <td><?= esc($row['username']) ?></td>
-                                    <td>
-                                        <div class="actions">
-                                            <a href="<?= base_url('admin/akun/edit/' . $row['id_admin']) ?>">Edit</a>
-                                            <a class="danger" href="<?= base_url('admin/akun/hapus/' . $row['id_admin']) ?>" onclick="return confirm('Yakin hapus akun admin ini?')">Hapus</a>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <tr>
-                                <td colspan="3">Belum ada akun admin.</td>
-                            </tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-    </main>
-</body>
-</html>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="5">Belum ada akun.</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<script>
+function confirmDeleteGuru(form) {
+    const choice = window.prompt('Hapus data guru juga? ketik "yes" untuk hapus data guru, ketik "no" untuk hapus akun saja.');
+    if (choice !== 'yes' && choice !== 'no') {
+        alert('Wajib pilih "yes" atau "no".');
+        return false;
+    }
+    form.querySelector('input[name="delete_guru_data"]').value = choice;
+    return confirm(choice === 'yes'
+        ? 'Akun dan data guru akan dihapus. Lanjutkan?'
+        : 'Akun login guru akan dihapus, data guru tetap ada. Lanjutkan?');
+}
+</script>
+
+<?= view('partials/app_end') ?>

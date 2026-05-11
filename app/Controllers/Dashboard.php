@@ -2,16 +2,19 @@
 
 namespace App\Controllers;
 
-use App\Models\GuruModel;
-use App\Models\IotDeviceModel;
-use App\Models\JadwalModel;
+use App\Libraries\LaravelApiClient;
 use App\Models\OperatorModel;
-use App\Models\PresensiModel;
-use App\Models\SiswaModel;
 use Config\IotDevice;
 
 class Dashboard extends BaseController
 {
+    private $client;
+
+    public function __construct()
+    {
+        $this->client = new LaravelApiClient();
+    }
+
     public function index()
     {
         $role = (string) session()->get('role');
@@ -30,41 +33,31 @@ class Dashboard extends BaseController
         ];
 
         if ($role === 'admin') {
+            $guruList = $this->safeList($this->client->get('guru'));
+            $siswaList = $this->safeList($this->client->get('siswa'));
+            $presensiList = $this->safeList($this->client->get('presensi'));
+
             $data['stats'] = [
                 'admin' => (new OperatorModel())->countAllResults(),
-                'guru' => (new GuruModel())->countAllResults(),
-                'siswa' => (new SiswaModel())->countAllResults(),
-                'presensi_hari_ini' => (new PresensiModel())
-                    ->where('tanggal', date('Y-m-d'))
-                    ->countAllResults(),
+                'guru' => count($guruList),
+                'siswa' => count($siswaList),
+                'presensi_hari_ini' => $this->countPresensiByDate($presensiList, date('Y-m-d')),
             ];
             $data['deviceSummary'] = $this->buildDeviceSummary();
         }
 
         if ($role === 'guru') {
-            $idGuru = (int) session()->get('id_guru');
-            $hari = $this->hariIndonesia(date('l'));
-            $kelasJadwal = (new JadwalModel())
-                ->select('kelas')
-                ->where('id_guru', $idGuru)
-                ->where('kelas !=', '')
-                ->findColumn('kelas') ?? [];
             $kelasWali = (string) session()->get('kelas_wali');
-            $kelasGuru = (int) session()->get('is_wali_kelas') === 1
-                ? $this->mergeKelasList($kelasJadwal, [$kelasWali])
-                : $this->mergeKelasList($kelasJadwal);
+            $hari = $this->hariIndonesia(date('l'));
+            $idGuru = (int) session()->get('id_guru');
+
+            $presensiList = $this->safeList($this->client->get('presensi'));
 
             $data['stats'] = [
-                'jadwal_hari_ini' => (new JadwalModel())
-                    ->where('id_guru', $idGuru)
-                    ->where('hari', $hari)
-                    ->countAllResults(),
-                'presensi_hari_ini' => (new PresensiModel())
-                    ->where('id_guru', $idGuru)
-                    ->where('tanggal', date('Y-m-d'))
-                    ->countAllResults(),
-                'kelas_diampu' => count($kelasGuru),
-                'is_wali_kelas' => (int) session()->get('is_wali_kelas'),
+                'jadwal_hari_ini' => $this->countJadwalHariIni($hari, $idGuru, $kelasWali),
+                'presensi_hari_ini' => $this->countPresensiByDateAndKelas($presensiList, date('Y-m-d'), $kelasWali),
+                'kelas_diampu' => $kelasWali !== '' ? 1 : 0,
+                'is_wali_kelas' => $kelasWali !== '' ? 1 : 0,
                 'kelas_wali' => $kelasWali,
             ];
         }
@@ -92,35 +85,29 @@ class Dashboard extends BaseController
         /** @var IotDevice $cfg */
         $cfg = config('IotDevice');
         $windowSec = max(20, (int) $cfg->deviceOnlineWindowSec);
-        $now = time();
 
-        $rows = (new IotDeviceModel())
-            ->orderBy('last_seen_at', 'DESC')
-            ->findAll();
+        $rows = $this->safeList($this->client->get('iot-admin/devices'));
 
         $online = 0;
         $offline = 0;
         $decorated = [];
 
         foreach ($rows as $row) {
-            $lastSeenAt = trim((string) ($row['last_seen_at'] ?? ''));
-            $lastSeenTs = $lastSeenAt !== '' ? strtotime($lastSeenAt) : false;
-            $isOnline = $lastSeenTs !== false && ($now - $lastSeenTs) <= $windowSec;
-            $secondsAgo = $lastSeenTs !== false ? max(0, $now - $lastSeenTs) : null;
-
-            if ($isOnline) {
-                $online++;
-            } else {
-                $offline++;
+            if (! is_array($row)) {
+                continue;
             }
+
+            $isOnline = (bool) ($row['is_online'] ?? false);
+            $online += $isOnline ? 1 : 0;
+            $offline += $isOnline ? 0 : 1;
 
             $decorated[] = [
                 'device_code' => (string) ($row['device_code'] ?? '-'),
                 'device_name' => (string) ($row['device_name'] ?? ''),
                 'status_mode' => (string) ($row['status_mode'] ?? 'attendance'),
                 'is_online' => $isOnline,
-                'last_seen_at' => $lastSeenAt,
-                'last_seen_human' => $secondsAgo === null ? 'Belum pernah heartbeat' : $this->humanizeAgo($secondsAgo),
+                'last_seen_at' => (string) ($row['last_seen_at'] ?? ''),
+                'last_seen_human' => (string) ($row['last_seen_human'] ?? '-'),
                 'last_ip' => (string) ($row['last_ip'] ?? '-'),
                 'last_message' => (string) ($row['last_message'] ?? ''),
             ];
@@ -129,26 +116,133 @@ class Dashboard extends BaseController
         return [
             'online' => $online,
             'offline' => $offline,
-            'total' => count($rows),
+            'total' => count($decorated),
             'rows' => $decorated,
             'window_sec' => $windowSec,
         ];
     }
 
-    private function humanizeAgo(int $seconds): string
+    private function countPresensiByDate(array $presensi, string $tanggal): int
     {
-        if ($seconds < 60) {
-            return $seconds . ' detik lalu';
+        $count = 0;
+
+        foreach ($presensi as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            if ($this->extractPresensiDate($item) === $tanggal) {
+                $count++;
+            }
         }
 
-        if ($seconds < 3600) {
-            return floor($seconds / 60) . ' menit lalu';
+        return $count;
+    }
+
+    private function countPresensiByDateAndKelas(array $presensi, string $tanggal, string $kelasWali): int
+    {
+        if ($kelasWali === '') {
+            return 0;
         }
 
-        if ($seconds < 86400) {
-            return floor($seconds / 3600) . ' jam lalu';
+        $count = 0;
+
+        foreach ($presensi as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            if ($this->extractPresensiDate($item) !== $tanggal) {
+                continue;
+            }
+
+            if ($this->resolvePresensiKelas($item) === $kelasWali) {
+                $count++;
+            }
         }
 
-        return floor($seconds / 86400) . ' hari lalu';
+        return $count;
+    }
+
+    private function extractPresensiDate(array $item): string
+    {
+        $tanggal = trim((string) ($item['tanggal'] ?? ''));
+        if ($this->validDate($tanggal)) {
+            return $tanggal;
+        }
+
+        $createdAt = (string) ($item['created_at'] ?? '');
+        if (strlen($createdAt) >= 10) {
+            $candidate = substr($createdAt, 0, 10);
+            if ($this->validDate($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
+    private function resolvePresensiKelas(array $item): string
+    {
+        $kelas = trim((string) ($item['kelas'] ?? ''));
+        if ($kelas !== '') {
+            return $kelas;
+        }
+
+        $siswa = is_array($item['siswa'] ?? null) ? $item['siswa'] : [];
+        return trim((string) ($siswa['kelas'] ?? ''));
+    }
+
+    private function countJadwalHariIni(string $hari, int $idGuru, string $kelasWali): int
+    {
+        $jadwalList = $this->safeList($this->client->get('jadwal'));
+        $count = 0;
+
+        foreach ($jadwalList as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            if ((string) ($item['hari'] ?? '') !== $hari) {
+                continue;
+            }
+
+            $match = false;
+            if ($idGuru > 0 && isset($item['id_guru']) && (int) $item['id_guru'] === $idGuru) {
+                $match = true;
+            }
+            if (! $match && $kelasWali !== '' && isset($item['kelas']) && (string) $item['kelas'] === $kelasWali) {
+                $match = true;
+            }
+
+            if ($match) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    private function safeList($response): array
+    {
+        if (! is_array($response)) {
+            return [];
+        }
+
+        if (array_key_exists('message', $response)) {
+            return [];
+        }
+
+        return array_values($response);
+    }
+
+    private function validDate(string $date): bool
+    {
+        $date = trim($date);
+        if ($date === '') {
+            return false;
+        }
+
+        return (bool) preg_match('/^\d{4}-\d{2}-\d{2}$/', $date);
     }
 }

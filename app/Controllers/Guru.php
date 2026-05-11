@@ -76,10 +76,6 @@ class Guru extends BaseController
             $payload['password'] = password_hash($plainPassword, PASSWORD_DEFAULT);
         }
 
-        if ($payload['foto_wajah'] === null) {
-            unset($payload['foto_wajah']);
-        }
-
         $response = $this->client->put('guru/' . $id, $payload);
 
         if (isset($response['message']) && !isset($response['id_guru'])) {
@@ -99,17 +95,14 @@ class Guru extends BaseController
     private function buildPayload(): array
     {
         $isWali = $this->request->getPost('is_wali_kelas') ? 1 : 0;
-        $fotoWajah = trim((string) $this->request->getPost('foto_wajah'));
         $kelasWali = trim((string) $this->request->getPost('kelas_wali'));
 
         return [
             'nama' => trim((string) $this->request->getPost('nama')),
-            'nip' => trim((string) $this->request->getPost('nip')),
+            'nip' => (($nip = trim((string) $this->request->getPost('nip'))) !== '' ? $nip : null),
             'username' => trim((string) $this->request->getPost('username')),
             'kelas_wali' => $isWali === 1 ? ($kelasWali !== '' ? $kelasWali : null) : null,
             'is_wali_kelas' => $isWali,
-            'id_rfid' => trim((string) $this->request->getPost('id_rfid')) ?: null,
-            'foto_wajah' => $fotoWajah !== '' ? $fotoWajah : null,
         ];
     }
 }

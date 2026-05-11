@@ -21,6 +21,7 @@ import sys
 import time
 from dataclasses import dataclass
 from typing import Optional
+from urllib.parse import urlparse
 
 import cv2
 import requests
@@ -78,6 +79,18 @@ def trim16(text: str) -> str:
     return (text or "")[:16]
 
 
+def normalize_rfid_uid(uid: str) -> str:
+    """Keep the reader UID shape intact, only remove transport noise."""
+    return " ".join((uid or "").strip().split())
+
+
+def endpoint_label(url: str) -> str:
+    parsed = urlparse(url or "")
+    if not parsed.scheme or not parsed.netloc:
+        return url or "-"
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+
+
 @dataclass
 class DeviceConfig:
     device_code: str
@@ -92,6 +105,8 @@ class DeviceConfig:
     timeout_sec: int
     heartbeat_interval_sec: float
     command_poll_interval_sec: float
+    backend_retry_interval_sec: float
+    backend_retry_max_attempts: int
 
     camera_index: int
     camera_width: int
@@ -103,6 +118,7 @@ class DeviceConfig:
     face_detect_interval_sec: float
     face_event_cooldown_sec: float
     face_min_size: int
+    face_force_capture_sec: float
     attendance_auth_mode: str
     attendance_attempt_cooldown_sec: float
     face_retry_max_attempts: int
@@ -155,27 +171,30 @@ class DeviceConfig:
             device_code=os.getenv("DEVICE_CODE", "orange-pi-zero3-01"),
             device_name=os.getenv("DEVICE_NAME", "OrangePi Zero3 #1"),
             firmware_version=os.getenv("DEVICE_FIRMWARE_VERSION", "iot-device-1.2.0"),
-            iot_api_url=os.getenv("IOT_API_URL", "http://192.168.0.104:8080/api/iot/scan"),
-            iot_health_url=os.getenv("IOT_HEALTH_URL", "http://192.168.0.104:8080/api/iot/health"),
-            iot_heartbeat_url=os.getenv("IOT_HEARTBEAT_URL", "http://192.168.0.104:8080/api/iot/device/heartbeat"),
-            iot_command_url=os.getenv("IOT_COMMAND_URL", "http://192.168.0.104:8080/api/iot/device/command"),
+            iot_api_url=os.getenv("IOT_API_URL", "http://127.0.0.1:8000/api/iot/scan"),
+            iot_health_url=os.getenv("IOT_HEALTH_URL", "http://127.0.0.1:8000/api/iot/health"),
+            iot_heartbeat_url=os.getenv("IOT_HEARTBEAT_URL", "http://127.0.0.1:8000/api/iot/device/heartbeat"),
+            iot_command_url=os.getenv("IOT_COMMAND_URL", "http://127.0.0.1:8000/api/iot/device/command"),
             iot_register_capture_url=os.getenv(
                 "IOT_REGISTER_CAPTURE_URL",
-                "http://192.168.0.104:8080/api/iot/register/capture",
+                "http://127.0.0.1:8000/api/iot/register/capture",
             ),
             device_token=os.getenv("IOT_DEVICE_TOKEN", ""),
             timeout_sec=env_int("IOT_TIMEOUT", 15),
             heartbeat_interval_sec=env_float("HEARTBEAT_INTERVAL_SEC", 8.0),
             command_poll_interval_sec=env_float("COMMAND_POLL_INTERVAL_SEC", 2.0),
+            backend_retry_interval_sec=env_float("BACKEND_RETRY_INTERVAL_SEC", 4.0),
+            backend_retry_max_attempts=env_int("BACKEND_RETRY_MAX_ATTEMPTS", 0),
             camera_index=env_int("CAMERA_INDEX", 0),
             camera_width=env_int("CAMERA_WIDTH", 640),
             camera_height=env_int("CAMERA_HEIGHT", 480),
-            camera_warmup_sec=env_float("CAMERA_WARMUP_SEC", 0.4),
+            camera_warmup_sec=env_float("CAMERA_WARMUP_SEC", 0.6),
             camera_use_v4l2=env_bool("CAMERA_USE_V4L2", True),
             jpeg_quality=env_int("JPEG_QUALITY", 90),
-            face_detect_interval_sec=env_float("FACE_DETECT_INTERVAL_SEC", 0.15),
+            face_detect_interval_sec=env_float("FACE_DETECT_INTERVAL_SEC", 0.12),
             face_event_cooldown_sec=env_float("FACE_EVENT_COOLDOWN_SEC", 3.0),
-            face_min_size=env_int("FACE_MIN_SIZE", 60),
+            face_min_size=env_int("FACE_MIN_SIZE", 50),
+            face_force_capture_sec=env_float("FACE_FORCE_CAPTURE_SEC", 3.0),
             attendance_auth_mode=os.getenv("ATTENDANCE_AUTH_MODE", "both").strip().lower(),
             attendance_attempt_cooldown_sec=env_float("ATTENDANCE_ATTEMPT_COOLDOWN_SEC", 2.5),
             face_retry_max_attempts=max(1, env_int("FACE_RETRY_MAX_ATTEMPTS", 3)),
@@ -550,8 +569,8 @@ class FaceDetector:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = self._cascade.detectMultiScale(
             gray,
-            scaleFactor=1.2,
-            minNeighbors=5,
+            scaleFactor=1.08,
+            minNeighbors=3,
             minSize=(self._min_size, self._min_size),
         )
         return len(faces) > 0
@@ -745,6 +764,14 @@ def build_led_indicator(cfg: DeviceConfig) -> LedIndicatorBase:
 
 
 class IotApiClient:
+    EXPECTED_PATHS = {
+        "IOT_API_URL": "/api/iot/scan",
+        "IOT_HEALTH_URL": "/api/iot/health",
+        "IOT_HEARTBEAT_URL": "/api/iot/device/heartbeat",
+        "IOT_COMMAND_URL": "/api/iot/device/command",
+        "IOT_REGISTER_CAPTURE_URL": "/api/iot/register/capture",
+    }
+
     def __init__(self, cfg: DeviceConfig) -> None:
         self.url = cfg.iot_api_url
         self.health_url = cfg.iot_health_url
@@ -757,21 +784,80 @@ class IotApiClient:
     def _headers(self) -> dict[str, str]:
         if not self.token:
             raise RuntimeError("IOT_DEVICE_TOKEN wajib diisi.")
-        return {"X-Device-Token": self.token}
+        return {
+            "X-Device-Token": self.token,
+            "Accept": "application/json",
+            "User-Agent": "smartpresence-iot-device/1.2.0",
+        }
 
     @staticmethod
     def _decode_response(resp: requests.Response) -> dict:
-        content_type = resp.headers.get("Content-Type", "")
+        content_type = resp.headers.get("Content-Type", "") or "-"
         if "application/json" in content_type:
-            payload = resp.json()
+            try:
+                payload = resp.json()
+            except ValueError:
+                payload = None
             if isinstance(payload, dict):
                 payload["http_status"] = resp.status_code
+                payload["content_type"] = content_type
                 return payload
-        return {"status": "error", "message": resp.text[:300], "http_status": resp.status_code}
 
-    def health_check(self) -> bool:
+        label = endpoint_label(resp.url)
+        preview = (resp.text or "").replace("\n", " ").replace("\r", " ").strip()[:120]
+        is_html = "<!doctype html" in preview.lower() or "<html" in preview.lower()
+        message = (
+            "Endpoint IoT mengembalikan HTML/non-JSON. Cek IOT_API_URL dan pastikan mengarah ke Laravel API /api/iot/scan."
+            if is_html
+            else "Endpoint IoT mengembalikan response non-JSON. Cek URL endpoint dan service backend."
+        )
+        print(
+            "[API-CONFIG] Non-JSON response "
+            f"http={resp.status_code} content_type={content_type} url={label} preview={preview}"
+        )
+        return {
+            "status": "error",
+            "error_type": "endpoint_non_json",
+            "message": message,
+            "http_status": resp.status_code,
+            "content_type": content_type,
+            "endpoint": label,
+        }
+
+    def validate_config(self) -> None:
+        values = {
+            "IOT_API_URL": self.url,
+            "IOT_HEALTH_URL": self.health_url,
+            "IOT_HEARTBEAT_URL": self.heartbeat_url,
+            "IOT_COMMAND_URL": self.command_url,
+            "IOT_REGISTER_CAPTURE_URL": self.register_capture_url,
+        }
+        for name, url in values.items():
+            parsed = urlparse(url or "")
+            expected = self.EXPECTED_PATHS[name]
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise RuntimeError(f"{name} tidak valid: {url!r}. Gunakan URL lengkap ke Laravel API.")
+            if parsed.path.rstrip("/") != expected:
+                raise RuntimeError(
+                    f"{name} harus mengarah ke {expected}, bukan {parsed.path or '/'} "
+                    f"({endpoint_label(url)})."
+                )
+
+    def health_check(self) -> dict:
         resp = requests.get(self.health_url, headers=self._headers(), timeout=self.timeout)
-        return resp.status_code == 200
+        return self._decode_response(resp)
+
+    def assert_backend_ready(self) -> None:
+        self.validate_config()
+        health = self.health_check()
+        status = str(health.get("status") or "").lower()
+        if health.get("http_status") != 200 or status != "ok":
+            message = str(health.get("message") or "Health check IoT gagal.")
+            endpoint = str(health.get("endpoint") or endpoint_label(self.health_url))
+            raise RuntimeError(
+                "Backend IoT belum siap atau endpoint salah: "
+                f"http={health.get('http_status')} endpoint={endpoint} message={message}"
+            )
 
     def send_heartbeat(
         self,
@@ -829,8 +915,10 @@ class IotApiClient:
         data = {
             "intent": (intent or "attendance").strip().lower(),
         }
-        if rfid_uid.strip():
-            data["rfid_uid"] = rfid_uid.strip()
+        normalized_uid = normalize_rfid_uid(rfid_uid)
+        if normalized_uid:
+            data["rfid_uid"] = normalized_uid
+            print(f"[RFID-SEND] uid={normalized_uid} intent={data['intent']} endpoint={endpoint_label(self.url)}")
 
         resp = requests.post(
             self.url,
@@ -854,7 +942,7 @@ class IotApiClient:
         data = {
             "device_code": cfg.device_code,
             "session_token": session_token,
-            "rfid_uid": rfid_uid,
+            "rfid_uid": normalize_rfid_uid(rfid_uid),
         }
 
         resp = requests.post(
@@ -886,6 +974,8 @@ def is_recent_rfid(last_uid: str, last_time: float, ttl_sec: float, now: float) 
 
 def build_fail_line(message: str) -> str:
     lower = message.lower()
+    if "endpoint iot" in lower or "non-json" in lower or "iot_api_url" in lower:
+        return "Endpoint salah"
     if "gateway face recognition" in lower or ("gateway" in lower and "face" in lower):
         return "Backend wajah off"
     if "gateway" in lower and ("akses" in lower or "connection" in lower or "connect" in lower):
@@ -899,6 +989,10 @@ def build_fail_line(message: str) -> str:
     return "Verifikasi gagal"
 
 
+def is_endpoint_error(payload: dict) -> bool:
+    return str(payload.get("error_type") or "") == "endpoint_non_json"
+
+
 def resolve_attendance_auth_mode(raw: str) -> str:
     return "both"
 
@@ -909,6 +1003,7 @@ def main() -> int:
     print("=== SmartPresence IoT Device Service ===")
     print(f"Device  : {cfg.device_code} ({cfg.device_name})")
     print(f"IOT API : {cfg.iot_api_url}")
+    print(f"IOT HLT : {cfg.iot_health_url}")
     print(f"RFID    : {cfg.rfid_mode}")
     attendance_auth_mode = resolve_attendance_auth_mode(cfg.attendance_auth_mode)
     if (cfg.attendance_auth_mode or "").strip().lower() != "both":
@@ -939,6 +1034,7 @@ def main() -> int:
     last_face_check_at = 0.0
     last_face_event_at = 0.0
     last_attendance_attempt_at = 0.0
+    last_forced_capture_at = 0.0
     last_standby_at = 0.0
     last_camera_error_at = 0.0
 
@@ -952,13 +1048,36 @@ def main() -> int:
 
     try:
         camera.open()
+        try:
+            api.validate_config()
+        except Exception as exc:
+            msg = f"Konfigurasi backend IoT salah: {exc}"
+            print(f"[FATAL] {msg}")
+            display.show("Backend salah", "Cek endpoint")
+            led.error()
+            return 1
 
-        if api.health_check():
-            print("[OK] Health check endpoint IoT berhasil.")
-            display.show("Backend online", "Ready")
-        else:
-            print("[WARN] Health check endpoint IoT gagal.")
-            display.show("Backend warning", "Check service")
+        backend_attempts = 0
+        while True:
+            try:
+                health = api.health_check()
+                status = str(health.get("status") or "").lower()
+                if health.get("http_status") == 200 and status == "ok":
+                    break
+                raise RuntimeError(
+                    "Backend IoT belum siap: "
+                    f"http={health.get('http_status')} message={health.get('message') or '-'}"
+                )
+            except Exception as exc:
+                backend_attempts += 1
+                msg = f"Backend belum siap: {exc}"
+                print(f"[WARN] {msg}")
+                display.show("Menunggu backend", "Cek jaringan")
+                led.info()
+                time.sleep(max(1.0, cfg.backend_retry_interval_sec))
+
+        print("[OK] Health check endpoint IoT berhasil.")
+        display.show("Backend online", "Ready")
 
         if cfg.rfid_mode == "stdin":
             print("[WARN] RFID_MODE=stdin kurang cocok untuk realtime kamera. Pakai softspi/serial/rc522.")
@@ -1027,7 +1146,8 @@ def main() -> int:
                 last_mode_key = mode_key
                 last_standby_at = now
 
-            uid = rfid.read_uid(timeout_sec=read_timeout)
+            raw_uid = rfid.read_uid(timeout_sec=read_timeout)
+            uid = normalize_rfid_uid(raw_uid or "")
             if uid:
                 if uid == last_rfid_event_uid and (now - last_rfid_event_at) < 1.5:
                     pass
@@ -1071,6 +1191,11 @@ def main() -> int:
                                 display.show("Kartu Valid", "Arahkan wajah")
                                 led.info()
                                 last_message = f"RFID valid: {name or uid}. Menunggu wajah."
+                            elif is_endpoint_error(precheck):
+                                clear_attendance_rfid_session()
+                                display.show("Endpoint Salah", "Cek IOT_API")
+                                led.error()
+                                last_message = str(precheck.get("message") or "Endpoint IoT salah/non-JSON.")
                             else:
                                 clear_attendance_rfid_session()
                                 display.show("Kartu TidakValid", "Daftar dulu")
@@ -1146,6 +1271,10 @@ def main() -> int:
                                 led.success()
                                 last_message = "Capture berhasil, tunggu admin simpan"
                                 active_session_status = "captured"
+                            elif is_endpoint_error(result):
+                                display.show("Endpoint Salah", "Cek IOT_API")
+                                led.error()
+                                last_message = str(result.get("message") or "Endpoint IoT salah/non-JSON.")
                             elif "simpan" in message.lower() and "admin" in message.lower():
                                 display.show("REGIS MENUNGGU", "Simpan di admin")
                                 led.info()
@@ -1177,7 +1306,7 @@ def main() -> int:
                             else:
                                 display.show("Wajah Terbaca", "Tap RFID dulu")
                                 led.error()
-                                last_message = "Wajah terbaca tanpa RFID valid."
+                                last_message = "Wajah terdeteksi namun card RFID tidak terdeteksi."
                             continue
 
                         last_attendance_attempt_at = now
@@ -1230,6 +1359,11 @@ def main() -> int:
                             led.success()
                             last_message = f"Selamat absen: {name or 'terverifikasi'}"
                             clear_attendance_rfid_session()
+                        elif is_endpoint_error(result):
+                            display.show("Endpoint Salah", "Cek IOT_API")
+                            led.error()
+                            last_message = str(result.get("message") or "Endpoint IoT salah/non-JSON.")
+                            clear_attendance_rfid_session()
                         else:
                             face_retry_attempts += 1
                             if face_retry_attempts < cfg.face_retry_max_attempts:
@@ -1246,10 +1380,91 @@ def main() -> int:
                             else:
                                 display.show("Gagal Absen", build_fail_line(message))
                                 led.error()
+                                print(f"[ABSEN-FAIL] reason=backend status={status} message={message}")
                                 last_message = (
                                     "Gagal absen: wajah tidak cocok setelah "
                                     f"{cfg.face_retry_max_attempts} percobaan."
                                 )
+                                clear_attendance_rfid_session()
+                elif mode == "attendance":
+                    recent_rfid_for_face = is_recent_rfid(
+                        rfid_cache_uid,
+                        rfid_cache_at,
+                        cfg.rfid_face_wait_timeout_sec,
+                        now,
+                    )
+                    wait_elapsed = now - rfid_cache_at if rfid_cache_at > 0 else 0.0
+                    should_force_capture = (
+                        recent_rfid_for_face
+                        and wait_elapsed >= max(1.0, cfg.face_force_capture_sec)
+                        and (now - last_forced_capture_at) >= max(0.8, cfg.attendance_attempt_cooldown_sec)
+                        and (now - last_attendance_attempt_at) >= max(0.8, cfg.attendance_attempt_cooldown_sec)
+                    )
+                    if should_force_capture:
+                        print(
+                            "[FACE-FALLBACK] reason=no_face_detected "
+                            f"rfid={rfid_cache_uid} wait={wait_elapsed:.2f}s"
+                        )
+                        last_attendance_attempt_at = now
+                        last_forced_capture_at = now
+                        try:
+                            image_bytes = Camera.encode_jpeg(frame, cfg.jpeg_quality)
+                            result = api.send_scan(
+                                rfid_uid=rfid_cache_uid,
+                                image_bytes=image_bytes,
+                                intent="attendance",
+                            )
+                        except Exception as exc:
+                            face_retry_attempts += 1
+                            print(f"[ABSEN-FAIL] reason=backend_error message={exc}")
+                            if face_retry_attempts < cfg.face_retry_max_attempts:
+                                display.show(
+                                    f"Wajah Gagal {face_retry_attempts}/{cfg.face_retry_max_attempts}",
+                                    "Arahkan ulang",
+                                )
+                                led.error()
+                                last_message = (
+                                    f"Fallback gagal ({face_retry_attempts}/"
+                                    f"{cfg.face_retry_max_attempts}): {exc}"
+                                )
+                                rfid_cache_at = now
+                            else:
+                                display.show("Gagal Absen", "Backend error")
+                                led.error()
+                                last_message = "Gagal absen: backend error berulang."
+                                clear_attendance_rfid_session()
+                            continue
+
+                        status = str(result.get("status") or "").lower()
+                        message = str(result.get("message") or "")
+                        identity = result.get("identity") if isinstance(result.get("identity"), dict) else {}
+                        name = str(identity.get("name") or "")
+                        print(
+                            f"[ABSEN-FALLBACK] status={status} http={result.get('http_status')} msg={message}"
+                        )
+                        if status == "verified":
+                            display.show("Selamat Absen", trim16(name or "Terverifikasi"))
+                            led.success()
+                            last_message = f"Selamat absen: {name or 'terverifikasi'}"
+                            clear_attendance_rfid_session()
+                        else:
+                            face_retry_attempts += 1
+                            print(f"[ABSEN-FAIL] reason=no_face status={status} message={message}")
+                            if face_retry_attempts < cfg.face_retry_max_attempts:
+                                display.show(
+                                    f"Wajah Gagal {face_retry_attempts}/{cfg.face_retry_max_attempts}",
+                                    "Arahkan ulang",
+                                )
+                                led.error()
+                                last_message = (
+                                    f"Wajah belum terdeteksi ({face_retry_attempts}/"
+                                    f"{cfg.face_retry_max_attempts})"
+                                )
+                                rfid_cache_at = now
+                            else:
+                                display.show("Gagal Absen", "Tidak ada wajah")
+                                led.error()
+                                last_message = "Gagal absen: wajah tidak terdeteksi."
                                 clear_attendance_rfid_session()
 
             recent_rfid_now = is_recent_rfid(

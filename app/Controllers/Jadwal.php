@@ -18,17 +18,6 @@ class Jadwal extends BaseController
         $response = $this->client->get('jadwal');
         $jadwalList = $response ?: [];
 
-        // Map guru name manually
-        $guruResponse = $this->client->get('guru') ?: [];
-        $guruMap = [];
-        foreach ($guruResponse as $g) {
-            $guruMap[$g['id_guru']] = $g['nama'];
-        }
-
-        foreach ($jadwalList as &$j) {
-            $j['nama_guru'] = $guruMap[$j['id_guru']] ?? 'Unknown';
-        }
-
         return view('data_jadwal', [
             'jadwal' => $jadwalList,
         ]);
@@ -36,15 +25,11 @@ class Jadwal extends BaseController
 
     public function tambah()
     {
-        $guruResponse = $this->client->get('guru') ?: [];
-
         return view('form_jadwal', [
-            'title' => 'Tambah Jadwal Mengajar',
+            'title' => 'Tambah Jadwal Masuk & Keluar',
             'action' => base_url('jadwal/simpan'),
             'jadwal' => null,
-            'guruList' => $guruResponse,
             'hariList' => $this->hariList(),
-            'kelasOptions' => $this->getMasterKelasList(),
         ]);
     }
 
@@ -56,15 +41,11 @@ class Jadwal extends BaseController
             return redirect()->to('/jadwal')->with('error', 'Jadwal tidak ditemukan.');
         }
 
-        $guruResponse = $this->client->get('guru') ?: [];
-
         return view('form_jadwal', [
-            'title' => 'Edit Jadwal Mengajar',
+            'title' => 'Edit Jadwal Masuk & Keluar',
             'action' => base_url('jadwal/update/' . $id),
             'jadwal' => $jadwal,
-            'guruList' => $guruResponse,
             'hariList' => $this->hariList(),
-            'kelasOptions' => $this->getMasterKelasList([(string) ($jadwal['kelas'] ?? '')]),
         ]);
     }
 
@@ -104,13 +85,52 @@ class Jadwal extends BaseController
     private function buildPayload(): array
     {
         return [
-            'id_guru' => (int) $this->request->getPost('id_guru'),
-            'kelas' => trim((string) $this->request->getPost('kelas')),
-            'mata_pelajaran' => trim((string) $this->request->getPost('mata_pelajaran')),
-            'hari' => trim((string) $this->request->getPost('hari')),
-            'jam_mulai' => trim((string) $this->request->getPost('jam_mulai')),
-            'jam_selesai' => trim((string) $this->request->getPost('jam_selesai')),
+            'hari' => $this->parseHari(),
+            'shifts' => $this->parseShifts(),
         ];
+    }
+
+    private function parseHari(): array
+    {
+        $raw = $this->request->getPost('hari');
+        $selected = is_array($raw) ? $raw : [$raw];
+        $allowed = $this->hariList();
+        $hari = [];
+
+        foreach ($selected as $item) {
+            $item = trim((string) $item);
+            if (in_array($item, $allowed, true) && ! in_array($item, $hari, true)) {
+                $hari[] = $item;
+            }
+        }
+
+        return $hari;
+    }
+
+    private function parseShifts(): array
+    {
+        $shifts = [];
+        $shiftCount = (int) $this->request->getPost('shift_count') ?? 0;
+
+        for ($i = 0; $i < $shiftCount; $i++) {
+            $nama = trim((string) $this->request->getPost("shift_{$i}_nama"));
+            $masukAwal = trim((string) $this->request->getPost("shift_{$i}_masuk_awal"));
+            $masukAkhir = trim((string) $this->request->getPost("shift_{$i}_masuk_akhir"));
+            $pulangAwal = trim((string) $this->request->getPost("shift_{$i}_pulang_awal"));
+            $pulangAkhir = trim((string) $this->request->getPost("shift_{$i}_pulang_akhir"));
+
+            if ($masukAwal && $masukAkhir && $pulangAwal && $pulangAkhir) {
+                $shifts[] = [
+                    'nama' => $nama ?: "Shift " . ($i + 1),
+                    'masuk_awal' => $masukAwal,
+                    'masuk_akhir' => $masukAkhir,
+                    'pulang_awal' => $pulangAwal,
+                    'pulang_akhir' => $pulangAkhir,
+                ];
+            }
+        }
+
+        return $shifts;
     }
 
     private function hariList(): array

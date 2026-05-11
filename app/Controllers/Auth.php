@@ -2,7 +2,7 @@
 
 namespace App\Controllers;
 
-use App\Models\GuruModel;
+use App\Libraries\LaravelApiClient;
 use App\Models\OperatorModel;
 
 class Auth extends BaseController
@@ -51,23 +51,24 @@ class Auth extends BaseController
             return redirect()->to('/dashboard');
         }
 
-        $guruModel = new GuruModel();
-        $guru = $guruModel->where('username', $username)->first();
+        $client = new LaravelApiClient();
+        $guruList = $this->safeList($client->get('guru'));
+        $guru = $this->findGuruByUsername($guruList, $username);
 
-        if ($guru && $this->passwordMatches($password, $guru['password'])) {
+        if ($guru && $this->passwordMatches($password, (string) ($guru['password'] ?? ''))) {
             $kelasWali = trim((string) ($guru['kelas_wali'] ?? ''));
-            $isWaliKelas = (int) ($guru['is_wali_kelas'] ?? 0) === 1 && $kelasWali !== '';
+            $isWaliKelas = $kelasWali !== '' ? 1 : 0;
 
             session()->regenerate(true);
             session()->set([
                 'logged_in' => true,
                 'role' => 'guru',
-                'user_id' => (int) $guru['id_guru'],
-                'id_guru' => (int) $guru['id_guru'],
-                'username' => $guru['username'],
-                'nama' => $guru['nama'],
-                'is_wali_kelas' => $isWaliKelas ? 1 : 0,
-                'kelas_wali' => $isWaliKelas ? $kelasWali : '',
+                'user_id' => (int) ($guru['id_guru'] ?? 0),
+                'id_guru' => (int) ($guru['id_guru'] ?? 0),
+                'username' => (string) ($guru['username'] ?? ''),
+                'nama' => (string) ($guru['nama'] ?? ''),
+                'is_wali_kelas' => $isWaliKelas,
+                'kelas_wali' => $kelasWali,
             ]);
 
             return redirect()->to('/dashboard');
@@ -94,5 +95,37 @@ class Auth extends BaseController
         }
 
         return hash_equals($stored, $input);
+    }
+
+    private function safeList($response): array
+    {
+        if (! is_array($response)) {
+            return [];
+        }
+
+        if (array_key_exists('message', $response)) {
+            return [];
+        }
+
+        return array_values($response);
+    }
+
+    private function findGuruByUsername(array $guruList, string $username): ?array
+    {
+        if ($username === '') {
+            return null;
+        }
+
+        foreach ($guruList as $guru) {
+            if (! is_array($guru)) {
+                continue;
+            }
+
+            if ((string) ($guru['username'] ?? '') === $username) {
+                return $guru;
+            }
+        }
+
+        return null;
     }
 }

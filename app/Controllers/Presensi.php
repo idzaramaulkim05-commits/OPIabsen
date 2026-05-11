@@ -15,24 +15,377 @@ class Presensi extends BaseController
 
     public function index()
     {
-        $response = $this->client->get('presensi');
-        
-        $presensiData = is_array($response) ? $response : [];
+        $today = date('Y-m-d');
+        $hariIni = $this->hariIndonesia(date('l'));
+        $jamSekarang = date('H:i');
 
-        // In original CI4 this view expects variables
-        return view('data_presensi', [
-            'presensi' => $presensiData,
+        $jadwal = $this->safeList($this->client->get('jadwal'));
+        $presensi = $this->buildReportRows($this->safeList($this->client->get('presensi')));
+        $presensi = $this->scopeRowsForRole($presensi, (string) session()->get('role'));
+
+        $presensiHariIni = array_values(array_filter($presensi, static fn (array $row): bool => $row['tanggal'] === $today));
+
+        return view('presensi', [
+            'hariIni' => $hariIni,
+            'jamSekarang' => $jamSekarang,
+            'jadwalHariIni' => $this->buildJadwalHariIni($jadwal, $hariIni, $jamSekarang),
+            'presensiHariIni' => $presensiHariIni,
         ]);
+    }
+
+    public function simpan()
+    {
+        if ((string) session()->get('role') !== 'admin') {
+            return redirect()->to('/presensi')->with('error', 'Akses ditolak.');
+        }
+
+        $id = (int) $this->request->getPost('id_presensi');
+        if ($id <= 0) {
+            return redirect()->to('/presensi')->with('error', 'ID presensi tidak valid.');
+        }
+
+        $payload = [
+            'status' => trim((string) $this->request->getPost('status')),
+            'jam' => trim((string) $this->request->getPost('jam')),
+            'metode' => trim((string) $this->request->getPost('metode')),
+            'catatan' => trim((string) $this->request->getPost('catatan')),
+        ];
+        $payload = array_filter($payload, static fn ($v): bool => $v !== '');
+
+        $response = $this->client->put('presensi/' . $id, $payload);
+        if (isset($response['message']) && $response['message'] === 'Updated') {
+            return redirect()->to('/presensi')->with('success', 'Data presensi berhasil diperbarui.');
+        }
+
+        return redirect()->to('/presensi')->with('error', 'Gagal memperbarui data presensi.');
+    }
+
+    public function update(int $id)
+    {
+        if ((string) session()->get('role') !== 'admin') {
+            return redirect()->to('/presensi')->with('error', 'Akses ditolak.');
+        }
+        $payload = [
+            'status' => trim((string) $this->request->getPost('status')),
+            'jam' => trim((string) $this->request->getPost('jam')),
+            'metode' => trim((string) $this->request->getPost('metode')),
+            'catatan' => trim((string) $this->request->getPost('catatan')),
+        ];
+        $payload = array_filter($payload, static fn ($v): bool => $v !== '');
+        $response = $this->client->put('presensi/' . $id, $payload);
+        if (isset($response['message']) && $response['message'] === 'Updated') {
+            return redirect()->to('/presensi')->with('success', 'Data presensi berhasil diperbarui.');
+        }
+        return redirect()->to('/presensi')->with('error', 'Gagal memperbarui data presensi.');
+    }
+
+    public function hapus(int $id)
+    {
+        if ((string) session()->get('role') !== 'admin') {
+            return redirect()->to('/presensi')->with('error', 'Akses ditolak.');
+        }
+        $response = $this->client->delete('presensi/' . $id);
+        if (($response['message'] ?? '') === 'Deleted') {
+            return redirect()->to('/presensi')->with('success', 'Data presensi berhasil dihapus.');
+        }
+
+        return redirect()->to('/presensi')->with('error', 'Gagal menghapus data presensi.');
+    }
+
+    public function riwayat()
+    {
+        return view('laporan_presensi', $this->buildReportContext());
     }
 
     public function cetak()
     {
-        $response = $this->client->get('presensi');
-        
-        $presensiData = is_array($response) ? $response : [];
+        return view('laporan_presensi_cetak', $this->buildReportContext());
+    }
 
-        return view('cetak_presensi', [
-            'presensi' => $presensiData,
+    private function buildReportContext(): array
+    {
+        $mulai = $this->validDate((string) $this->request->getGet('mulai')) ?: date('Y-m-01');
+        $akhir = $this->validDate((string) $this->request->getGet('akhir')) ?: date('Y-m-d');
+        if ($mulai > $akhir) {
+            [$mulai, $akhir] = [$akhir, $mulai];
+        }
+
+        $kelasFilter = trim((string) $this->request->getGet('kelas'));
+        $shiftStatusFilter = $this->normalizeShiftStatusFilter($this->request->getGet('shift_status'));
+        $role = (string) session()->get('role');
+        $kelasWali = trim((string) session()->get('kelas_wali'));
+
+        $rows = $this->buildReportRows($this->safeList($this->client->get('presensi')));
+        $rows = $this->scopeRowsForRole($rows, $role);
+
+        $kelasFromRows = [];
+        foreach ($rows as $row) {
+            if (($row['kelas'] ?? '-') !== '-') {
+                $kelasFromRows[] = (string) $row['kelas'];
+            }
+        }
+
+        $kelasOptions = $this->getMasterKelasList($kelasFromRows);
+        if ($role === 'guru' && $kelasWali !== '' && ! in_array($kelasWali, $kelasOptions, true)) {
+            $kelasOptions = $this->mergeKelasList($kelasOptions, [$kelasWali]);
+        }
+        if ($kelasFilter !== '' && ! in_array($kelasFilter, $kelasOptions, true)) {
+            if ($role !== 'guru' || $kelasFilter === $kelasWali) {
+                $kelasOptions = $this->mergeKelasList($kelasOptions, [$kelasFilter]);
+            }
+        }
+
+        $rows = array_values(array_filter($rows, static function (array $row) use ($mulai, $akhir, $kelasFilter, $shiftStatusFilter): bool {
+            if ($row['tanggal'] < $mulai || $row['tanggal'] > $akhir) {
+                return false;
+            }
+
+            if ($kelasFilter !== '' && $row['kelas'] !== $kelasFilter) {
+                return false;
+            }
+
+            return $shiftStatusFilter === [] || in_array((string) ($row['shift_status'] ?? ''), $shiftStatusFilter, true);
+        }));
+
+        $scopeInfo = $role === 'guru'
+            ? 'Laporan dibatasi sesuai data presensi pada kelas wali guru.'
+            : '';
+
+        return [
+            'role' => $role,
+            'mulai' => $mulai,
+            'akhir' => $akhir,
+            'kelasFilter' => $kelasFilter,
+            'kelasOptions' => $kelasOptions,
+            'shiftStatusFilter' => $shiftStatusFilter,
+            'shiftStatusOptions' => $this->shiftStatusOptions(),
+            'cetakQuery' => $this->buildCetakQuery($mulai, $akhir, $kelasFilter, $shiftStatusFilter),
+            'guruTanpaKelas' => $role === 'guru' && $kelasWali === '',
+            'scopeInfo' => $scopeInfo,
+            'rows' => $rows,
+        ];
+    }
+
+    private function buildReportRows(array $presensi): array
+    {
+        $rows = [];
+
+        foreach ($presensi as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $siswa = is_array($item['siswa'] ?? null) ? $item['siswa'] : [];
+            $guru = is_array($item['guru'] ?? null) ? $item['guru'] : [];
+            $createdAt = (string) ($item['created_at'] ?? '');
+            $tanggal = $this->validDate((string) ($item['tanggal'] ?? '')) ?: substr($createdAt, 0, 10);
+            if (! $this->validDate($tanggal)) {
+                $tanggal = date('Y-m-d');
+            }
+
+            $jam = trim((string) ($item['jam'] ?? ''));
+            if ($jam === '' && strlen($createdAt) >= 16) {
+                $jam = substr($createdAt, 11, 5);
+            }
+
+            $shiftStatus = trim((string) ($item['shift_status'] ?? ''));
+            if ($shiftStatus === '') {
+                $shiftStatus = 'in_shift';
+            }
+            $shiftName = trim((string) ($item['shift_name'] ?? ''));
+
+            $rows[] = [
+                'id_presensi' => (int) ($item['id_presensi'] ?? 0),
+                'id_guru' => (int) ($item['id_guru'] ?? ($guru['id_guru'] ?? 0)),
+                'id_siswa' => (int) ($item['id_siswa'] ?? ($siswa['id'] ?? 0)),
+                'tanggal' => $tanggal,
+                'kelas' => $this->fallback((string) ($item['kelas'] ?? ''), (string) ($siswa['kelas'] ?? ''), '-'),
+                'nama_siswa' => $this->fallback((string) ($item['nama_siswa'] ?? ''), (string) ($siswa['nama'] ?? ''), '-'),
+                'no_induk' => $this->fallback((string) ($item['no_induk'] ?? ''), (string) ($siswa['no_induk'] ?? ''), '-'),
+                'status' => $this->fallback((string) ($item['status'] ?? ''), '', 'hadir'),
+                'jam' => $jam !== '' ? $jam : '-',
+                'metode' => $this->fallback((string) ($item['metode'] ?? ''), '', '-'),
+                'shift_name' => $shiftName !== '' ? $shiftName : $this->shiftStatusLabel($shiftStatus),
+                'shift_status' => $shiftStatus,
+                'shift_status_label' => $this->shiftStatusLabel($shiftStatus),
+                'nama_guru' => $this->fallback((string) ($item['nama_guru'] ?? ''), (string) ($guru['nama'] ?? ''), '-'),
+                'catatan' => (string) ($item['catatan'] ?? ''),
+            ];
+        }
+
+        usort($rows, static function (array $a, array $b): int {
+            return strcmp($b['tanggal'] . ' ' . $b['jam'], $a['tanggal'] . ' ' . $a['jam']);
+        });
+
+        return $rows;
+    }
+
+    private function scopeRowsForRole(array $rows, string $role): array
+    {
+        if ($role !== 'guru') {
+            return $rows;
+        }
+
+        $kelasWali = trim((string) session()->get('kelas_wali'));
+
+        if ($kelasWali === '') {
+            return [];
+        }
+
+        return array_values(array_filter($rows, static function (array $row) use ($kelasWali): bool {
+            return (string) ($row['kelas'] ?? '') === $kelasWali;
+        }));
+    }
+
+    private function buildJadwalHariIni(array $jadwal, string $hariIni, string $jamSekarang): array
+    {
+        $rows = [];
+
+        foreach ($jadwal as $item) {
+            if (! is_array($item) || ! $this->jadwalMatchesHari($item, $hariIni)) {
+                continue;
+            }
+
+            $shifts = $item['shifts'] ?? [];
+            if (is_string($shifts)) {
+                $decoded = json_decode($shifts, true);
+                $shifts = is_array($decoded) ? $decoded : [];
+            }
+            if (! is_array($shifts)) {
+                $shifts = [];
+            }
+
+            foreach ($shifts as $idx => $shift) {
+                if (! is_array($shift)) {
+                    continue;
+                }
+
+                $masukAwal = (string) ($shift['masuk_awal'] ?? '');
+                $masukAkhir = (string) ($shift['masuk_akhir'] ?? '');
+                $pulangAwal = (string) ($shift['pulang_awal'] ?? '');
+                $pulangAkhir = (string) ($shift['pulang_akhir'] ?? '');
+
+                $shift['nama'] = trim((string) ($shift['nama'] ?? '')) ?: 'Jadwal ' . ($idx + 1);
+                $shift['is_active'] = $this->timeInRange($jamSekarang, $masukAwal, $masukAkhir)
+                    || $this->timeInRange($jamSekarang, $pulangAwal, $pulangAkhir);
+                $shifts[$idx] = $shift;
+            }
+
+            $item['shifts'] = $shifts;
+            $rows[] = $item;
+        }
+
+        return $rows;
+    }
+
+    private function timeInRange(string $time, string $start, string $end): bool
+    {
+        if ($start === '' || $end === '') {
+            return false;
+        }
+
+        return $time >= substr($start, 0, 5) && $time <= substr($end, 0, 5);
+    }
+
+    private function normalizeShiftStatusFilter($raw): array
+    {
+        $allowed = array_keys($this->shiftStatusOptions());
+        $items = is_array($raw) ? $raw : [$raw];
+        $statuses = [];
+
+        foreach ($items as $item) {
+            $item = trim((string) $item);
+            if (in_array($item, $allowed, true) && ! in_array($item, $statuses, true)) {
+                $statuses[] = $item;
+            }
+        }
+
+        return $statuses;
+    }
+
+    private function shiftStatusOptions(): array
+    {
+        return [
+            'in_shift' => 'Dalam Jadwal',
+            'outside_shift' => 'Di Luar Jadwal',
+            'no_schedule' => 'Tanpa Jadwal',
+        ];
+    }
+
+    private function shiftStatusLabel(string $status): string
+    {
+        $options = $this->shiftStatusOptions();
+        return $options[$status] ?? 'Dalam Shift';
+    }
+
+    private function buildCetakQuery(string $mulai, string $akhir, string $kelasFilter, array $shiftStatusFilter): string
+    {
+        return http_build_query([
+            'mulai' => $mulai,
+            'akhir' => $akhir,
+            'kelas' => $kelasFilter,
+            'shift_status' => $shiftStatusFilter,
         ]);
+    }
+
+    private function jadwalMatchesHari(array $item, string $hariIni): bool
+    {
+        $hariList = $item['hari_list'] ?? null;
+        if (is_array($hariList)) {
+            return in_array($hariIni, $hariList, true);
+        }
+
+        $hari = (string) ($item['hari'] ?? '');
+        $items = preg_split('/\s*,\s*/', $hari, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        return in_array($hariIni, $items, true);
+    }
+
+    private function safeList($response): array
+    {
+        if (! is_array($response)) {
+            return [];
+        }
+
+        if (array_key_exists('message', $response)) {
+            return [];
+        }
+
+        return array_values($response);
+    }
+
+    private function validDate(string $date): ?string
+    {
+        $date = trim($date);
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return null;
+        }
+
+        return $date;
+    }
+
+    private function fallback(string $value, string $fallback, string $default): string
+    {
+        $value = trim($value);
+        if ($value !== '') {
+            return $value;
+        }
+
+        $fallback = trim($fallback);
+        return $fallback !== '' ? $fallback : $default;
+    }
+
+    private function hariIndonesia(string $englishDay): string
+    {
+        $map = [
+            'Monday' => 'Senin',
+            'Tuesday' => 'Selasa',
+            'Wednesday' => 'Rabu',
+            'Thursday' => 'Kamis',
+            'Friday' => 'Jumat',
+            'Saturday' => 'Sabtu',
+            'Sunday' => 'Minggu',
+        ];
+
+        return $map[$englishDay] ?? $englishDay;
     }
 }

@@ -4,67 +4,68 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cetak Laporan Presensi</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 18px; color: #111827; }
-        h2, p { margin: 0 0 8px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-        th, td { border: 1px solid #111; padding: 6px; font-size: 12px; }
-        th { background: #f3f4f6; }
-        @media print {
-            .noprint { display: none; }
-            body { margin: 0; }
-        }
-    </style>
+    <link rel="stylesheet" href="<?= base_url('app-theme.css') ?>">
 </head>
-<body>
-    <div class="noprint" style="margin-bottom:10px;">
-        <button onclick="window.print()">Print</button>
-    </div>
+<body class="print-page">
+    <main class="print-shell">
+        <div class="print-actions noprint">
+            <button class="btn btn-primary" type="button" onclick="window.print()">Print</button>
+        </div>
 
-    <h2>Laporan Presensi</h2>
-    <p>Periode: <?= esc($mulai) ?> s.d. <?= esc($akhir) ?></p>
-    <p>Kelas: <?= esc($kelasFilter !== '' ? $kelasFilter : 'Semua') ?></p>
-
-    <table>
-        <thead>
-            <tr>
-                <th>No</th>
-                <th>Tanggal</th>
-                <th>Kelas</th>
-                <th>Siswa</th>
-                <th>No Induk</th>
-                <th>Status</th>
-                <th>Jam</th>
-                <th>Guru</th>
-                <th>Catatan</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (! empty($rows)): ?>
-                <?php $no = 1; ?>
-                <?php foreach ($rows as $row): ?>
-                    <tr>
-                        <td><?= $no++ ?></td>
-                        <td><?= esc($row['tanggal']) ?></td>
-                        <td><?= esc($row['kelas']) ?></td>
-                        <td><?= esc($row['nama_siswa']) ?></td>
-                        <td><?= esc($row['no_induk']) ?></td>
-                        <td><?= esc(ucfirst($row['status'])) ?></td>
-                        <td><?= esc($row['jam']) ?></td>
-                        <td><?= esc($row['nama_guru']) ?></td>
-                        <td><?= esc($row['catatan'] ?? '-') ?></td>
-                    </tr>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <tr><td colspan="9">Tidak ada data pada periode ini.</td></tr>
+        <section class="print-heading">
+            <h2>Laporan Presensi</h2>
+            <p>Periode: <?= esc($mulai) ?> s.d. <?= esc($akhir) ?></p>
+            <p>Kelas: <?= esc($kelasFilter !== '' ? $kelasFilter : 'Semua') ?></p>
+            <?php if (! empty($shiftStatusFilter ?? [])): ?>
+                <p>Jadwal/Waktu: <?= esc(implode(', ', array_map(static fn ($status) => (string) (($shiftStatusOptions ?? [])[$status] ?? $status), $shiftStatusFilter))) ?></p>
             <?php endif; ?>
-        </tbody>
-    </table>
+        </section>
+
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Tanggal</th>
+                        <th>Kelas</th>
+                        <th>Siswa</th>
+                        <th>No Induk</th>
+                        <th>Status</th>
+                        <th>Jam</th>
+                        <th>Jadwal/Waktu</th>
+                        <th>Guru</th>
+                        <th>Catatan</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (! empty($rows)): ?>
+                        <?php $no = 1; ?>
+                        <?php foreach ($rows as $row): ?>
+                            <tr>
+                                <td><?= $no++ ?></td>
+                                <td><?= esc($row['tanggal']) ?></td>
+                                <td><?= esc($row['kelas']) ?></td>
+                                <td><?= esc($row['nama_siswa']) ?></td>
+                                <td><?= esc($row['no_induk']) ?></td>
+                                <td><?= esc(ucfirst((string) $row['status'])) ?></td>
+                                <td><?= esc($row['jam']) ?></td>
+                                <td><?= esc((string) ($row['shift_status_label'] ?? '-')) ?> - <?= esc((string) ($row['shift_name'] ?? '-')) ?></td>
+                                <td><?= esc($row['nama_guru']) ?></td>
+                                <td><?= esc($row['catatan'] ?? '-') ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="10">Tidak ada data pada periode ini.</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </main>
 
     <script>
-        window.onload = () => {
-            window.print();
-        };
+        window.addEventListener('load', () => window.print());
     </script>
 </body>
 </html>

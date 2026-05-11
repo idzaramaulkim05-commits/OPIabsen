@@ -53,13 +53,13 @@ def main() -> int:
     else:
         load_env_file_fallback(".env")
 
-    ci_health = os.getenv("IOT_HEALTH_URL", "http://192.168.0.104:8080/api/iot/health")
+    ci_health = os.getenv("IOT_HEALTH_URL", "http://127.0.0.1:80/api/iot/health")
     ci_token = os.getenv("IOT_DEVICE_TOKEN", "") or os.getenv("iotDevice.deviceToken", "")
 
-    gateway_url = os.getenv("FACE_GATEWAY_URL", "http://192.168.0.104:8000/api/face/attendance")
+    gateway_url = os.getenv("FACE_GATEWAY_URL", "http://127.0.0.1:8000/api/face/landmark")
     gateway_token = os.getenv("FACE_GATEWAY_BEARER_TOKEN", "") or os.getenv("faceGateway.bearerToken", "absensiiot2026-token")
 
-    engine_url = os.getenv("FACE_ENGINE_HEALTH_URL", "http://192.168.0.104:8001/health")
+    engine_url = os.getenv("FACE_ENGINE_HEALTH_URL", "http://127.0.0.1:8001/health")
 
     checks = [
         (
@@ -72,7 +72,7 @@ def main() -> int:
             "Laravel Gateway",
             gateway_url,
             {"Authorization": f"Bearer {gateway_token}"} if gateway_token else {},
-            {200, 401, 403, 405},
+            {200, 401, 403, 422},
         ),
         ("FastAPI Engine", engine_url, {}, None),
     ]
