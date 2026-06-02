@@ -117,11 +117,18 @@ class Presensi extends BaseController
 
         $rows = $this->buildReportRows($this->safeList($this->client->get('presensi')));
         $rows = $this->scopeRowsForRole($rows, $role);
+        $students = $this->buildStudentRows($this->safeList($this->client->get('siswa')));
+        $students = $this->scopeStudentsForRole($students, $role);
 
         $kelasFromRows = [];
         foreach ($rows as $row) {
             if (($row['kelas'] ?? '-') !== '-') {
                 $kelasFromRows[] = (string) $row['kelas'];
+            }
+        }
+        foreach ($students as $student) {
+            if (($student['kelas'] ?? '-') !== '-') {
+                $kelasFromRows[] = (string) $student['kelas'];
             }
         }
 
@@ -146,6 +153,11 @@ class Presensi extends BaseController
 
             return $shiftStatusFilter === [] || in_array((string) ($row['shift_status'] ?? ''), $shiftStatusFilter, true);
         }));
+        $students = array_values(array_filter($students, static function (array $student) use ($kelasFilter): bool {
+            return $kelasFilter === '' || (string) ($student['kelas'] ?? '') === $kelasFilter;
+        }));
+        $dateColumns = $this->buildDateColumns($mulai, $akhir);
+        $matrixRows = $this->buildAttendanceMatrix($students, $rows, $dateColumns);
 
         $scopeInfo = $role === 'guru'
             ? 'Laporan dibatasi sesuai data presensi pada kelas wali guru.'
@@ -163,6 +175,9 @@ class Presensi extends BaseController
             'guruTanpaKelas' => $role === 'guru' && $kelasWali === '',
             'scopeInfo' => $scopeInfo,
             'rows' => $rows,
+            'dateColumns' => $dateColumns,
+            'matrixRows' => $matrixRows,
+            'summaryTotals' => $this->buildSummaryTotals($matrixRows),
         ];
     }
 
@@ -220,6 +235,35 @@ class Presensi extends BaseController
         return $rows;
     }
 
+    private function buildStudentRows(array $siswa): array
+    {
+        $students = [];
+
+        foreach ($siswa as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $students[] = [
+                'id_siswa' => (int) ($item['id'] ?? 0),
+                'nama_siswa' => $this->fallback((string) ($item['nama'] ?? ''), '', '-'),
+                'no_induk' => $this->fallback((string) ($item['no_induk'] ?? ''), '', '-'),
+                'kelas' => $this->fallback((string) ($item['kelas'] ?? ''), '', '-'),
+            ];
+        }
+
+        usort($students, static function (array $a, array $b): int {
+            $kelasCompare = strnatcasecmp((string) ($a['kelas'] ?? ''), (string) ($b['kelas'] ?? ''));
+            if ($kelasCompare !== 0) {
+                return $kelasCompare;
+            }
+
+            return strnatcasecmp((string) ($a['nama_siswa'] ?? ''), (string) ($b['nama_siswa'] ?? ''));
+        });
+
+        return $students;
+    }
+
     private function scopeRowsForRole(array $rows, string $role): array
     {
         if ($role !== 'guru') {
@@ -235,6 +279,205 @@ class Presensi extends BaseController
         return array_values(array_filter($rows, static function (array $row) use ($kelasWali): bool {
             return (string) ($row['kelas'] ?? '') === $kelasWali;
         }));
+    }
+
+    private function scopeStudentsForRole(array $students, string $role): array
+    {
+        if ($role !== 'guru') {
+            return $students;
+        }
+
+        $kelasWali = trim((string) session()->get('kelas_wali'));
+
+        if ($kelasWali === '') {
+            return [];
+        }
+
+        return array_values(array_filter($students, static function (array $student) use ($kelasWali): bool {
+            return (string) ($student['kelas'] ?? '') === $kelasWali;
+        }));
+    }
+
+    private function buildDateColumns(string $mulai, string $akhir): array
+    {
+        $columns = [];
+        $start = strtotime($mulai);
+        $end = strtotime($akhir);
+
+        if ($start === false || $end === false) {
+            return $columns;
+        }
+
+        for ($date = $start; $date <= $end; $date = strtotime('+1 day', $date)) {
+            if ($date === false) {
+                break;
+            }
+
+            $columns[] = [
+                'date' => date('Y-m-d', $date),
+                'day' => date('j', $date),
+                'label' => date('d', $date),
+            ];
+        }
+
+        return $columns;
+    }
+
+    private function buildAttendanceMatrix(array $students, array $rows, array $dateColumns): array
+    {
+        $dateSet = [];
+        foreach ($dateColumns as $column) {
+            $dateSet[(string) ($column['date'] ?? '')] = true;
+        }
+
+        $matrix = [];
+        foreach ($students as $student) {
+            $key = $this->studentKey($student);
+            if ($key === '') {
+                continue;
+            }
+
+            $matrix[$key] = $this->emptyMatrixRow($student, $dateColumns);
+        }
+
+        foreach ($rows as $row) {
+            $tanggal = (string) ($row['tanggal'] ?? '');
+            if ($tanggal === '' || ! isset($dateSet[$tanggal])) {
+                continue;
+            }
+
+            $key = $this->studentKey($row);
+            if ($key === '') {
+                continue;
+            }
+
+            if (! isset($matrix[$key])) {
+                $matrix[$key] = $this->emptyMatrixRow([
+                    'id_siswa' => (int) ($row['id_siswa'] ?? 0),
+                    'nama_siswa' => (string) ($row['nama_siswa'] ?? '-'),
+                    'no_induk' => (string) ($row['no_induk'] ?? '-'),
+                    'kelas' => (string) ($row['kelas'] ?? '-'),
+                ], $dateColumns);
+            }
+
+            $code = $this->statusCode((string) ($row['status'] ?? 'hadir'));
+            if ($code === '') {
+                continue;
+            }
+
+            $current = (string) ($matrix[$key]['cells'][$tanggal] ?? '-');
+            if ($this->statusPriority($code) > $this->statusPriority($current)) {
+                $matrix[$key]['cells'][$tanggal] = $code;
+            }
+        }
+
+        $matrixRows = array_values($matrix);
+        foreach ($matrixRows as &$matrixRow) {
+            $matrixRow['summary'] = ['H' => 0, 'I' => 0, 'S' => 0, 'A' => 0];
+            foreach ($matrixRow['cells'] as $code) {
+                if (isset($matrixRow['summary'][$code])) {
+                    $matrixRow['summary'][$code]++;
+                }
+            }
+        }
+        unset($matrixRow);
+
+        usort($matrixRows, static function (array $a, array $b): int {
+            $kelasCompare = strnatcasecmp((string) ($a['kelas'] ?? ''), (string) ($b['kelas'] ?? ''));
+            if ($kelasCompare !== 0) {
+                return $kelasCompare;
+            }
+
+            return strnatcasecmp((string) ($a['nama_siswa'] ?? ''), (string) ($b['nama_siswa'] ?? ''));
+        });
+
+        return $matrixRows;
+    }
+
+    private function emptyMatrixRow(array $student, array $dateColumns): array
+    {
+        $cells = [];
+        foreach ($dateColumns as $column) {
+            $date = (string) ($column['date'] ?? '');
+            if ($date !== '') {
+                $cells[$date] = '-';
+            }
+        }
+
+        return [
+            'id_siswa' => (int) ($student['id_siswa'] ?? 0),
+            'no_induk' => $this->fallback((string) ($student['no_induk'] ?? ''), '', '-'),
+            'nama_siswa' => $this->fallback((string) ($student['nama_siswa'] ?? ''), '', '-'),
+            'kelas' => $this->fallback((string) ($student['kelas'] ?? ''), '', '-'),
+            'cells' => $cells,
+            'summary' => ['H' => 0, 'I' => 0, 'S' => 0, 'A' => 0],
+        ];
+    }
+
+    private function buildSummaryTotals(array $matrixRows): array
+    {
+        $totals = ['H' => 0, 'I' => 0, 'S' => 0, 'A' => 0, 'siswa' => count($matrixRows)];
+
+        foreach ($matrixRows as $row) {
+            $summary = is_array($row['summary'] ?? null) ? $row['summary'] : [];
+            foreach (['H', 'I', 'S', 'A'] as $code) {
+                $totals[$code] += (int) ($summary[$code] ?? 0);
+            }
+        }
+
+        return $totals;
+    }
+
+    private function studentKey(array $row): string
+    {
+        $id = (int) ($row['id_siswa'] ?? 0);
+        if ($id > 0) {
+            return 'id:' . $id;
+        }
+
+        $noInduk = trim((string) ($row['no_induk'] ?? ''));
+        if ($noInduk !== '' && $noInduk !== '-') {
+            return 'nis:' . strtolower($noInduk);
+        }
+
+        $nama = trim((string) ($row['nama_siswa'] ?? ''));
+        $kelas = trim((string) ($row['kelas'] ?? ''));
+        if ($nama !== '' && $nama !== '-') {
+            return 'name:' . strtolower($kelas . '|' . $nama);
+        }
+
+        return '';
+    }
+
+    private function statusCode(string $status): string
+    {
+        $status = strtolower(trim($status));
+
+        if (in_array($status, ['hadir', 'h'], true)) {
+            return 'H';
+        }
+        if (in_array($status, ['izin', 'ijin', 'i'], true)) {
+            return 'I';
+        }
+        if (in_array($status, ['sakit', 's'], true)) {
+            return 'S';
+        }
+        if (in_array($status, ['alpa', 'alpha', 'absen', 'tidak hadir', 'a'], true)) {
+            return 'A';
+        }
+
+        return '';
+    }
+
+    private function statusPriority(string $code): int
+    {
+        return [
+            '-' => 0,
+            'A' => 1,
+            'I' => 2,
+            'S' => 3,
+            'H' => 4,
+        ][$code] ?? 0;
     }
 
     private function buildJadwalHariIni(array $jadwal, string $hariIni, string $jamSekarang): array

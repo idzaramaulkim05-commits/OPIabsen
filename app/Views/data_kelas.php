@@ -47,17 +47,25 @@
                 <?php if (! empty($kelas)): ?>
                     <?php $no = 1; ?>
                     <?php foreach ($kelas as $row): ?>
-                        <?php $namaKelas = (string) ($row['nama_kelas'] ?? ''); ?>
+                        <?php
+                        $namaKelas = (string) ($row['nama_kelas'] ?? '');
+                        $usedCount = (int) ($usageMap[$namaKelas] ?? 0);
+                        ?>
                         <tr>
                             <td><?= $no++ ?></td>
                             <td><?= esc($namaKelas) ?></td>
-                            <td><?= esc((string) ((int) ($usageMap[$namaKelas] ?? 0))) ?></td>
+                            <td><?= esc((string) $usedCount) ?></td>
                             <td>
                                 <form action="<?= base_url('master-data/kelas/update/' . (int) $row['id_kelas']) ?>" method="post" class="inline-controls">
                                     <?= csrf_field() ?>
                                     <input class="inline-field" type="text" name="nama_kelas" value="<?= esc($namaKelas) ?>" required>
                                     <button class="btn btn-secondary" type="submit">Update</button>
-                                    <a class="btn btn-danger" href="<?= base_url('master-data/kelas/hapus/' . (int) $row['id_kelas']) ?>" onclick="return confirm('Yakin hapus kelas ini?')">Hapus</a>
+                                    <?php if ($usedCount > 0): ?>
+                                        <button class="btn btn-muted" type="button" disabled>Dipakai</button>
+                                        <span class="helper">Tidak bisa dihapus karena masih dipakai siswa.</span>
+                                    <?php else: ?>
+                                        <a class="btn btn-danger" href="<?= base_url('master-data/kelas/hapus/' . (int) $row['id_kelas']) ?>" onclick="return confirm('Yakin hapus kelas ini?')">Hapus</a>
+                                    <?php endif; ?>
                                 </form>
                             </td>
                         </tr>

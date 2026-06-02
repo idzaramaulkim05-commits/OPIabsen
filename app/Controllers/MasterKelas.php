@@ -15,10 +15,12 @@ class MasterKelas extends BaseController
 
     public function index()
     {
-        $response = $this->client->get('master-kelas');
+        $kelas = $this->safeList($this->client->get('master-kelas'));
+        $siswa = $this->safeList($this->client->get('siswa'));
+
         return view('data_kelas', [
-            'kelas' => $response ?: [],
-            'usageMap' => [], // Disable usage map for now or fetch from API
+            'kelas' => $kelas,
+            'usageMap' => $this->buildUsageMap($siswa),
         ]);
     }
 
@@ -50,6 +52,19 @@ class MasterKelas extends BaseController
 
     public function hapus(int $id)
     {
+        $kelas = $this->client->get('master-kelas/' . $id);
+        if (! is_array($kelas) || isset($kelas['message'])) {
+            return redirect()->to('/master-data/kelas')->with('error', 'Data kelas tidak ditemukan.');
+        }
+
+        $namaKelas = trim((string) ($kelas['nama_kelas'] ?? ''));
+        $usageMap = $this->buildUsageMap($this->safeList($this->client->get('siswa')));
+        $usedCount = (int) ($usageMap[$namaKelas] ?? 0);
+
+        if ($usedCount > 0) {
+            return redirect()->to('/master-data/kelas')->with('error', 'Kelas ' . $namaKelas . ' masih dipakai oleh ' . $usedCount . ' siswa dan tidak bisa dihapus.');
+        }
+
         $response = $this->client->delete('master-kelas/' . $id);
 
         if (isset($response['message']) && $response['message'] !== 'Deleted') {
@@ -57,5 +72,34 @@ class MasterKelas extends BaseController
         }
 
         return redirect()->to('/master-data/kelas')->with('success', 'Data kelas berhasil dihapus.');
+    }
+
+    private function buildUsageMap(array $siswa): array
+    {
+        $usageMap = [];
+
+        foreach ($siswa as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $kelas = trim((string) ($item['kelas'] ?? ''));
+            if ($kelas === '') {
+                continue;
+            }
+
+            $usageMap[$kelas] = (int) ($usageMap[$kelas] ?? 0) + 1;
+        }
+
+        return $usageMap;
+    }
+
+    private function safeList($response): array
+    {
+        if (! is_array($response) || array_key_exists('message', $response)) {
+            return [];
+        }
+
+        return array_values($response);
     }
 }

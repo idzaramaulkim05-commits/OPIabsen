@@ -2,6 +2,9 @@
 $kelasOptions = is_array($kelasOptions ?? null) ? $kelasOptions : [];
 $shiftStatusOptions = is_array($shiftStatusOptions ?? null) ? $shiftStatusOptions : [];
 $shiftStatusFilter = is_array($shiftStatusFilter ?? null) ? $shiftStatusFilter : [];
+$dateColumns = is_array($dateColumns ?? null) ? $dateColumns : [];
+$matrixRows = is_array($matrixRows ?? null) ? $matrixRows : [];
+$summaryTotals = is_array($summaryTotals ?? null) ? $summaryTotals : [];
 $guruTanpaKelas = (bool) ($guruTanpaKelas ?? false);
 $scopeInfo = trim((string) ($scopeInfo ?? ''));
 ?>
@@ -13,7 +16,7 @@ $scopeInfo = trim((string) ($scopeInfo ?? ''));
 <div class="page-toolbar">
     <div class="page-toolbar-title">
         <h2>Laporan Presensi</h2>
-        <p>Filter riwayat kehadiran berdasarkan tanggal dan kelas.</p>
+        <p>Filter rekap kehadiran berdasarkan tanggal dan kelas.</p>
     </div>
 </div>
 
@@ -73,54 +76,101 @@ $scopeInfo = trim((string) ($scopeInfo ?? ''));
 <?php endif; ?>
 
 <section class="panel">
+    <div class="report-summary-bar">
+        <div>
+            <strong>Periode:</strong> <?= esc($mulai) ?> s.d. <?= esc($akhir) ?>
+        </div>
+        <div>
+            <strong>Kelas:</strong> <?= esc($kelasFilter !== '' ? $kelasFilter : (($role ?? '') === 'guru' ? 'Kelas wali' : 'Semua')) ?>
+        </div>
+        <div>
+            <strong>Jumlah siswa:</strong> <?= esc((string) ($summaryTotals['siswa'] ?? count($matrixRows))) ?>
+        </div>
+    </div>
+    <div class="attendance-legend" aria-label="Legenda status presensi">
+        <span><strong>H</strong> Hadir</span>
+        <span><strong>I</strong> Izin</span>
+        <span><strong>S</strong> Sakit</span>
+        <span><strong>A</strong> Alpa</span>
+        <span><strong>-</strong> Belum ada data</span>
+    </div>
+
     <div class="table-wrap">
-        <table class="data-table">
+        <table class="data-table attendance-matrix">
             <thead>
                 <tr>
-                    <th>No</th>
-                    <th>Tanggal</th>
-                    <th>Kelas</th>
-                    <th>Siswa</th>
-                    <th>No Induk</th>
-                    <th>Status</th>
-                    <th>Jam</th>
-                    <th>Jadwal/Waktu</th>
-                    <th>Guru</th>
-                    <th>Catatan</th>
+                    <th class="matrix-sticky matrix-no" rowspan="2">No</th>
+                    <th class="matrix-sticky matrix-nis" rowspan="2">No Induk</th>
+                    <th class="matrix-sticky matrix-name" rowspan="2">Nama Siswa</th>
+                    <th rowspan="2">Kelas</th>
+                    <th class="matrix-date-group" colspan="<?= max(1, count($dateColumns)) ?>">Tanggal</th>
+                    <th class="matrix-summary-group" colspan="4">Rekap</th>
+                </tr>
+                <tr>
+                    <?php if ($dateColumns !== []): ?>
+                        <?php foreach ($dateColumns as $column): ?>
+                            <th class="matrix-date" title="<?= esc((string) ($column['date'] ?? '')) ?>"><?= esc((string) ($column['day'] ?? '')) ?></th>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <th class="matrix-date">-</th>
+                    <?php endif; ?>
+                    <th class="matrix-total">H</th>
+                    <th class="matrix-total">I</th>
+                    <th class="matrix-total">S</th>
+                    <th class="matrix-total">A</th>
                 </tr>
             </thead>
             <tbody>
-                <?php if (! empty($rows)): ?>
+                <?php if (! empty($matrixRows)): ?>
                     <?php $no = 1; ?>
-                    <?php foreach ($rows as $row): ?>
-                        <?php
-                        $status = strtolower((string) ($row['status'] ?? ''));
-                        $statusClass = $status === 'alpa' ? 'danger' : (in_array($status, ['izin', 'sakit'], true) ? 'warning' : 'success');
-                        $shiftStatus = (string) ($row['shift_status'] ?? 'in_shift');
-                        $shiftClass = $shiftStatus === 'outside_shift' ? 'warning' : ($shiftStatus === 'no_schedule' ? 'danger' : 'success');
-                        ?>
+                    <?php foreach ($matrixRows as $row): ?>
                         <tr>
-                            <td><?= $no++ ?></td>
-                            <td><?= esc($row['tanggal']) ?></td>
-                            <td><?= esc($row['kelas']) ?></td>
-                            <td><?= esc($row['nama_siswa']) ?></td>
-                            <td><?= esc($row['no_induk']) ?></td>
-                            <td><span class="status-chip <?= esc($statusClass) ?>"><?= esc(ucfirst((string) $row['status'])) ?></span></td>
-                            <td><?= esc($row['jam']) ?></td>
-                            <td>
-                                <span class="status-chip <?= esc($shiftClass) ?>"><?= esc((string) ($row['shift_status_label'] ?? '-')) ?></span>
-                                <div><?= esc((string) ($row['shift_name'] ?? '-')) ?></div>
-                            </td>
-                            <td><?= esc($row['nama_guru']) ?></td>
-                            <td><?= esc($row['catatan'] ?? '-') ?></td>
+                            <td class="matrix-sticky matrix-no"><?= $no++ ?></td>
+                            <td class="matrix-sticky matrix-nis"><?= esc((string) ($row['no_induk'] ?? '-')) ?></td>
+                            <td class="matrix-sticky matrix-name"><?= esc((string) ($row['nama_siswa'] ?? '-')) ?></td>
+                            <td><?= esc((string) ($row['kelas'] ?? '-')) ?></td>
+                            <?php if ($dateColumns !== []): ?>
+                                <?php foreach ($dateColumns as $column): ?>
+                                    <?php
+                                    $date = (string) ($column['date'] ?? '');
+                                    $code = (string) (($row['cells'] ?? [])[$date] ?? '-');
+                                    $codeClass = $code !== '-' ? ' status-' . strtolower($code) : ' status-empty';
+                                    ?>
+                                    <td class="matrix-cell<?= esc($codeClass) ?>"><?= esc($code) ?></td>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <td class="matrix-cell status-empty">-</td>
+                            <?php endif; ?>
+                            <td class="matrix-total"><?= esc((string) (($row['summary'] ?? [])['H'] ?? 0)) ?></td>
+                            <td class="matrix-total"><?= esc((string) (($row['summary'] ?? [])['I'] ?? 0)) ?></td>
+                            <td class="matrix-total"><?= esc((string) (($row['summary'] ?? [])['S'] ?? 0)) ?></td>
+                            <td class="matrix-total"><?= esc((string) (($row['summary'] ?? [])['A'] ?? 0)) ?></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="10">Data presensi tidak ditemukan pada filter ini.</td>
+                        <td colspan="<?= 8 + count($dateColumns) ?>">Data siswa atau presensi tidak ditemukan pada filter ini.</td>
                     </tr>
                 <?php endif; ?>
             </tbody>
+            <?php if (! empty($matrixRows)): ?>
+                <tfoot>
+                    <tr>
+                        <th colspan="4">Total</th>
+                        <?php if ($dateColumns !== []): ?>
+                            <?php foreach ($dateColumns as $column): ?>
+                                <th class="matrix-cell">-</th>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <th class="matrix-cell">-</th>
+                        <?php endif; ?>
+                        <th class="matrix-total"><?= esc((string) ($summaryTotals['H'] ?? 0)) ?></th>
+                        <th class="matrix-total"><?= esc((string) ($summaryTotals['I'] ?? 0)) ?></th>
+                        <th class="matrix-total"><?= esc((string) ($summaryTotals['S'] ?? 0)) ?></th>
+                        <th class="matrix-total"><?= esc((string) ($summaryTotals['A'] ?? 0)) ?></th>
+                    </tr>
+                </tfoot>
+            <?php endif; ?>
         </table>
     </div>
 </section>

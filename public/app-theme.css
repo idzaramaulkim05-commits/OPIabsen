@@ -509,6 +509,139 @@ button[disabled] {
     border-bottom: 0;
 }
 
+.report-summary-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    color: #334b50;
+    font-size: 13px;
+}
+
+.attendance-legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.attendance-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-muted);
+    padding: 5px 8px;
+}
+
+.attendance-legend strong {
+    color: var(--primary-strong);
+}
+
+.attendance-matrix {
+    min-width: 980px;
+}
+
+.attendance-matrix th,
+.attendance-matrix td {
+    border-right: 1px solid #e6efeb;
+}
+
+.attendance-matrix th:last-child,
+.attendance-matrix td:last-child {
+    border-right: 0;
+}
+
+.attendance-matrix .matrix-date,
+.attendance-matrix .matrix-cell,
+.attendance-matrix .matrix-total {
+    width: 34px;
+    min-width: 34px;
+    padding: 8px 6px;
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.attendance-matrix .matrix-date-group,
+.attendance-matrix .matrix-summary-group {
+    text-align: center;
+}
+
+.attendance-matrix .matrix-no {
+    width: 48px;
+    min-width: 48px;
+    text-align: center;
+}
+
+.attendance-matrix .matrix-nis {
+    width: 116px;
+    min-width: 116px;
+}
+
+.attendance-matrix .matrix-name {
+    width: 230px;
+    min-width: 230px;
+}
+
+.attendance-matrix .matrix-sticky {
+    position: sticky;
+    z-index: 2;
+    background: var(--surface);
+}
+
+.attendance-matrix th.matrix-sticky {
+    z-index: 4;
+    background: #f0f7f4;
+}
+
+.attendance-matrix .matrix-no {
+    left: 0;
+}
+
+.attendance-matrix .matrix-nis {
+    left: 48px;
+}
+
+.attendance-matrix .matrix-name {
+    left: 164px;
+}
+
+.attendance-matrix .status-h {
+    color: #146536;
+    background: #eefaf2;
+    font-weight: 800;
+}
+
+.attendance-matrix .status-i,
+.attendance-matrix .status-s {
+    color: #8a5a00;
+    background: #fff8e6;
+    font-weight: 800;
+}
+
+.attendance-matrix .status-a {
+    color: #8f1f14;
+    background: #fff1ef;
+    font-weight: 800;
+}
+
+.attendance-matrix .status-empty {
+    color: #8a98a0;
+    background: #fbfdfc;
+}
+
+.attendance-matrix tfoot th {
+    border-top: 1px solid var(--border-strong);
+    color: #123133;
+    background: #f6fbf9;
+}
+
 .face-thumb {
     width: 52px;
     height: 52px;
@@ -772,12 +905,23 @@ button[disabled] {
 
 .print-heading {
     margin-bottom: 12px;
+    text-align: center;
+}
+
+.print-brand {
+    color: #111827;
+    font-family: 'Sora', Arial, sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 .print-heading h2 {
     margin: 0 0 6px;
     font-family: 'Sora', Arial, sans-serif;
-    font-size: 22px;
+    font-size: 20px;
+    text-transform: uppercase;
 }
 
 .print-heading p {
@@ -858,9 +1002,16 @@ button[disabled] {
 }
 
 @media print {
+    @page {
+        size: A4 landscape;
+        margin: 10mm;
+    }
+
     body.app-page,
     body.print-page {
         background: #ffffff;
+        color: #111827;
+        font-family: Arial, sans-serif;
     }
 
     .app-topbar,
@@ -891,5 +1042,54 @@ button[disabled] {
         border: 1px solid #111827;
         padding: 6px;
         font-size: 12px;
+    }
+
+    .attendance-matrix {
+        min-width: 0;
+    }
+
+    .attendance-matrix th,
+    .attendance-matrix td {
+        border: 1px solid #111827;
+    }
+
+    .attendance-matrix .matrix-sticky {
+        position: static;
+    }
+
+    .attendance-matrix .matrix-date,
+    .attendance-matrix .matrix-cell,
+    .attendance-matrix .matrix-total {
+        width: 22px;
+        min-width: 22px;
+        padding: 3px 2px;
+        font-size: 9px;
+        line-height: 1.1;
+    }
+
+    .attendance-matrix .matrix-nis,
+    .attendance-matrix .matrix-name {
+        min-width: 0;
+        width: auto;
+    }
+
+    .print-matrix th,
+    .print-matrix td {
+        padding: 3px 4px;
+        font-size: 9px;
+        line-height: 1.12;
+    }
+
+    .print-heading {
+        margin-bottom: 8px;
+    }
+
+    .print-heading h2 {
+        font-size: 16px;
+    }
+
+    .print-heading p {
+        color: #111827;
+        font-size: 10px;
     }
 }
