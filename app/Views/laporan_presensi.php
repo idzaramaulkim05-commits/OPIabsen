@@ -28,34 +28,41 @@ $scopeInfo = trim((string) ($scopeInfo ?? ''));
     </section>
 <?php endif; ?>
 
-<section class="panel">
-    <form class="filter-grid" action="<?= base_url('presensi/riwayat') ?>" method="get">
-        <div class="field">
-            <label for="mulai">Tanggal Mulai</label>
-            <input id="mulai" type="date" name="mulai" value="<?= esc($mulai) ?>">
+<section class="panel report-filter-panel">
+    <form class="report-filter" action="<?= base_url('presensi/riwayat') ?>" method="get">
+        <div class="report-filter-main">
+            <div class="field">
+                <label for="mulai">Tanggal Mulai</label>
+                <input id="mulai" type="date" name="mulai" value="<?= esc($mulai) ?>">
+            </div>
+
+            <div class="field">
+                <label for="akhir">Tanggal Akhir</label>
+                <input id="akhir" type="date" name="akhir" value="<?= esc($akhir) ?>">
+            </div>
+
+            <div class="field report-class-field">
+                <label for="kelas">Kelas</label>
+                <select id="kelas" name="kelas" <?= $guruTanpaKelas ? 'disabled' : '' ?>>
+                    <option value=""><?= $role === 'guru' ? 'Kelas wali' : 'Semua kelas' ?></option>
+                    <?php foreach ($kelasOptions as $kelas): ?>
+                        <option value="<?= esc((string) $kelas) ?>" <?= $kelasFilter === (string) $kelas ? 'selected' : '' ?>>
+                            <?= esc((string) $kelas) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <div class="helper"><?= $role === 'guru' ? 'Data otomatis dibatasi ke kelas wali.' : 'Pilih satu kelas untuk membatasi data.' ?></div>
+            </div>
+
+            <div class="report-filter-actions">
+                <button class="btn btn-primary" type="submit">Tampilkan</button>
+                <a class="btn btn-secondary" href="<?= base_url('presensi/cetak?' . ($cetakQuery ?? '')) ?>" target="_blank">Cetak Laporan</a>
+            </div>
         </div>
 
-        <div class="field">
-            <label for="akhir">Tanggal Akhir</label>
-            <input id="akhir" type="date" name="akhir" value="<?= esc($akhir) ?>">
-        </div>
-
-        <div class="field">
-            <label for="kelas">Kelas</label>
-            <select id="kelas" name="kelas" <?= $guruTanpaKelas ? 'disabled' : '' ?>>
-                <option value=""><?= $role === 'guru' ? 'Kelas wali' : 'Semua kelas' ?></option>
-                <?php foreach ($kelasOptions as $kelas): ?>
-                    <option value="<?= esc((string) $kelas) ?>" <?= $kelasFilter === (string) $kelas ? 'selected' : '' ?>>
-                        <?= esc((string) $kelas) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-            <div class="helper"><?= $role === 'guru' ? 'Data otomatis dibatasi ke kelas wali.' : 'Pilih satu kelas untuk membatasi data yang ditampilkan.' ?></div>
-        </div>
-
-        <div class="field full-span">
+        <div class="report-shift-filter">
             <div class="field-label">Jadwal / Waktu</div>
-            <div class="checkbox-grid">
+            <div class="report-checkbox-grid">
                 <?php foreach ($shiftStatusOptions as $value => $label): ?>
                     <div class="checkbox-row">
                         <input id="shift_status_<?= esc((string) $value) ?>" type="checkbox" name="shift_status[]" value="<?= esc((string) $value) ?>" <?= in_array((string) $value, $shiftStatusFilter, true) ? 'checked' : '' ?>>
@@ -63,11 +70,6 @@ $scopeInfo = trim((string) ($scopeInfo ?? ''));
                     </div>
                 <?php endforeach; ?>
             </div>
-        </div>
-
-        <div class="filter-actions">
-            <button class="btn btn-primary" type="submit">Tampilkan</button>
-            <a class="btn btn-secondary" href="<?= base_url('presensi/cetak?' . ($cetakQuery ?? '')) ?>" target="_blank">Cetak Laporan</a>
         </div>
     </form>
 </section>
@@ -80,14 +82,17 @@ $scopeInfo = trim((string) ($scopeInfo ?? ''));
 
 <section class="panel">
     <div class="report-summary-bar">
-        <div>
-            <strong>Periode:</strong> <?= esc($mulai) ?> s.d. <?= esc($akhir) ?>
+        <div class="report-summary-item">
+            <span>Periode</span>
+            <strong><?= esc($mulai) ?> s.d. <?= esc($akhir) ?></strong>
         </div>
-        <div>
-            <strong>Kelas:</strong> <?= esc($kelasFilter !== '' ? $kelasFilter : (($role ?? '') === 'guru' ? 'Kelas wali' : 'Semua')) ?>
+        <div class="report-summary-item">
+            <span>Kelas</span>
+            <strong><?= esc($kelasFilter !== '' ? $kelasFilter : (($role ?? '') === 'guru' ? 'Kelas wali' : 'Semua')) ?></strong>
         </div>
-        <div>
-            <strong>Jumlah siswa:</strong> <?= esc((string) ($summaryTotals['siswa'] ?? count($matrixRows))) ?>
+        <div class="report-summary-item">
+            <span>Jumlah siswa</span>
+            <strong><?= esc((string) ($summaryTotals['siswa'] ?? count($matrixRows))) ?></strong>
         </div>
     </div>
     <div class="attendance-legend" aria-label="Legenda status presensi">
