@@ -114,6 +114,9 @@ class Presensi extends BaseController
         $shiftStatusFilter = $this->normalizeShiftStatusFilter($this->request->getGet('shift_status'));
         $role = (string) session()->get('role');
         $kelasWali = trim((string) session()->get('kelas_wali'));
+        if ($role === 'guru') {
+            $kelasFilter = $kelasWali !== '' ? $kelasWali : '';
+        }
 
         $rows = $this->buildReportRows($this->safeList($this->client->get('presensi')));
         $rows = $this->scopeRowsForRole($rows, $role);
@@ -132,12 +135,11 @@ class Presensi extends BaseController
             }
         }
 
-        $kelasOptions = $this->getMasterKelasList($kelasFromRows);
-        if ($role === 'guru' && $kelasWali !== '' && ! in_array($kelasWali, $kelasOptions, true)) {
-            $kelasOptions = $this->mergeKelasList($kelasOptions, [$kelasWali]);
-        }
-        if ($kelasFilter !== '' && ! in_array($kelasFilter, $kelasOptions, true)) {
-            if ($role !== 'guru' || $kelasFilter === $kelasWali) {
+        if ($role === 'guru') {
+            $kelasOptions = $kelasWali !== '' ? [$kelasWali] : [];
+        } else {
+            $kelasOptions = $this->getMasterKelasList($kelasFromRows);
+            if ($kelasFilter !== '' && ! in_array($kelasFilter, $kelasOptions, true)) {
                 $kelasOptions = $this->mergeKelasList($kelasOptions, [$kelasFilter]);
             }
         }

@@ -5,6 +5,8 @@ $shiftStatusFilter = is_array($shiftStatusFilter ?? null) ? $shiftStatusFilter :
 $dateColumns = is_array($dateColumns ?? null) ? $dateColumns : [];
 $matrixRows = is_array($matrixRows ?? null) ? $matrixRows : [];
 $summaryTotals = is_array($summaryTotals ?? null) ? $summaryTotals : [];
+$kelasFilter = trim((string) ($kelasFilter ?? ''));
+$role = (string) ($role ?? '');
 $guruTanpaKelas = (bool) ($guruTanpaKelas ?? false);
 $scopeInfo = trim((string) ($scopeInfo ?? ''));
 ?>
@@ -41,13 +43,14 @@ $scopeInfo = trim((string) ($scopeInfo ?? ''));
         <div class="field">
             <label for="kelas">Kelas</label>
             <select id="kelas" name="kelas" <?= $guruTanpaKelas ? 'disabled' : '' ?>>
-                <option value=""><?= ($role ?? '') === 'guru' ? 'Kelas wali' : 'Semua kelas' ?></option>
+                <option value=""><?= $role === 'guru' ? 'Kelas wali' : 'Semua kelas' ?></option>
                 <?php foreach ($kelasOptions as $kelas): ?>
                     <option value="<?= esc((string) $kelas) ?>" <?= $kelasFilter === (string) $kelas ? 'selected' : '' ?>>
                         <?= esc((string) $kelas) ?>
                     </option>
                 <?php endforeach; ?>
             </select>
+            <div class="helper"><?= $role === 'guru' ? 'Data otomatis dibatasi ke kelas wali.' : 'Pilih satu kelas untuk membatasi data yang ditampilkan.' ?></div>
         </div>
 
         <div class="field full-span">
