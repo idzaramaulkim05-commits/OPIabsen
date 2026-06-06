@@ -2,15 +2,21 @@
 
 namespace App\Controllers;
 
-use App\Models\GuruModel;
+use App\Libraries\LaravelApiClient;
 use App\Models\OperatorModel;
 
 class Akun extends BaseController
 {
+    private $client;
+
+    public function __construct()
+    {
+        $this->client = new LaravelApiClient();
+    }
+
     public function index()
     {
         $adminModel = new OperatorModel();
-        $guruModel = new GuruModel();
         $rows = [];
 
         foreach ($adminModel->orderBy('id_admin', 'ASC')->findAll() as $row) {
@@ -22,7 +28,16 @@ class Akun extends BaseController
             ];
         }
 
-        foreach ($guruModel->orderBy('id_guru', 'ASC')->findAll() as $row) {
+        $guruResponse = $this->client->get('guru');
+        if ($this->isApiError($guruResponse)) {
+            return redirect()->to('/dashboard')->with('error', $guruResponse['message']);
+        }
+
+        foreach ($this->safeList($guruResponse) as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
             $username = trim((string) ($row['username'] ?? ''));
             if ($username === '') {
                 continue;
@@ -90,13 +105,7 @@ class Akun extends BaseController
             return redirect()->back()->withInput()->with('error', implode(' ', $this->validator->getErrors()));
         }
 
-        $guruModel = new GuruModel();
-        $existingGuru = $guruModel->where('username', $payload['username'])->first();
-        if ($existingGuru) {
-            return redirect()->back()->withInput()->with('error', 'Username guru sudah digunakan.');
-        }
-
-        $guruModel->insert([
+        $response = $this->client->post('guru', [
             'nama' => $payload['nama'],
             'nip' => null,
             'username' => $payload['username'],
@@ -105,9 +114,11 @@ class Akun extends BaseController
             'is_wali_kelas' => 0,
             'id_rfid' => null,
             'foto_wajah' => null,
-            'created_at' => date('Y-m-d H:i:s'),
-            'updated_at' => date('Y-m-d H:i:s'),
         ]);
+
+        if ($this->isApiError($response) || (isset($response['message']) && ! isset($response['id_guru']))) {
+            return redirect()->back()->withInput()->with('error', $this->apiMessage($response, 'Gagal menambahkan akun guru.'));
+        }
 
         return redirect()->to('/admin/akun')->with('success', 'Akun guru berhasil ditambahkan.');
     }
@@ -123,8 +134,10 @@ class Akun extends BaseController
             $akun['role'] = 'admin';
             $akun['id'] = $id;
         } elseif ($role === 'guru') {
-            $model = new GuruModel();
-            $akun = $model->find($id);
+            $akun = $this->client->get('guru/' . $id);
+            if ($this->isApiError($akun)) {
+                return redirect()->to('/admin/akun')->with('error', $akun['message']);
+            }
             if (! $akun || trim((string) ($akun['username'] ?? '')) === '') {
                 return redirect()->to('/admin/akun')->with('error', 'Akun guru tidak ditemukan.');
             }
@@ -178,35 +191,39 @@ class Akun extends BaseController
         if ($role !== 'guru') {
             return redirect()->to('/admin/akun')->with('error', 'Role akun tidak valid.');
         }
-        $model = new GuruModel();
-        $existing = $model->find($id);
-        if (! $existing) {
+        $existing = $this->client->get('guru/' . $id);
+        if ($this->isApiError($existing)) {
+            return redirect()->to('/admin/akun')->with('error', $existing['message']);
+        }
+        if (! $existing || isset($existing['message'])) {
             return redirect()->to('/admin/akun')->with('error', 'Akun guru tidak ditemukan.');
         }
         if (! $this->validateData([
             'username' => $username,
             'password' => $password,
+            'nama' => trim((string) $this->request->getPost('nama')),
         ], [
             'username' => 'required|min_length[4]',
             'password' => 'permit_empty|min_length[6]',
+            'nama' => 'required|min_length[3]',
         ])) {
             return redirect()->back()->withInput()->with('error', implode(' ', $this->validator->getErrors()));
         }
-        $existingByUsername = $model->where('username', $username)->first();
-        if ($existingByUsername && (int) ($existingByUsername['id_guru'] ?? 0) !== $id) {
-            return redirect()->back()->withInput()->with('error', 'Username guru sudah digunakan.');
-        }
 
         $payload = [
+            'nama' => trim((string) $this->request->getPost('nama')),
             'username' => $username,
-            'updated_at' => date('Y-m-d H:i:s'),
         ];
 
         if ($password !== '') {
             $payload['password'] = password_hash($password, PASSWORD_DEFAULT);
         }
 
-        $model->update($id, $payload);
+        $response = $this->client->put('guru/' . $id, $payload);
+        if ($this->isApiError($response) || (isset($response['message']) && ! isset($response['id_guru']))) {
+            return redirect()->back()->withInput()->with('error', $this->apiMessage($response, 'Gagal memperbarui akun guru.'));
+        }
+
         return redirect()->to('/admin/akun')->with('success', 'Akun guru berhasil diperbarui.');
     }
 
@@ -234,22 +251,42 @@ class Akun extends BaseController
             return redirect()->to('/admin/akun')->with('error', 'Pilih opsi hapus akun guru terlebih dahulu.');
         }
 
-        $guruModel = new GuruModel();
-        $guru = $guruModel->find($id);
-        if (! $guru) {
+        $guru = $this->client->get('guru/' . $id);
+        if ($this->isApiError($guru)) {
+            return redirect()->to('/admin/akun')->with('error', $guru['message']);
+        }
+        if (! $guru || isset($guru['message'])) {
             return redirect()->to('/admin/akun')->with('error', 'Akun guru tidak ditemukan.');
         }
 
         if ($deleteMode === 'yes') {
-            $guruModel->delete($id);
+            $response = $this->client->delete('guru/' . $id);
+            if ($this->isApiError($response) || (($response['message'] ?? '') !== 'Deleted')) {
+                return redirect()->to('/admin/akun')->with('error', $this->apiMessage($response, 'Gagal menghapus data guru.'));
+            }
+
             return redirect()->to('/admin/akun')->with('success', 'Akun dan data guru berhasil dihapus.');
         }
 
-        $guruModel->update($id, [
+        $response = $this->client->put('guru/' . $id, [
             'username' => null,
             'password' => null,
-            'updated_at' => date('Y-m-d H:i:s'),
         ]);
+
+        if ($this->isApiError($response) || (isset($response['message']) && ! isset($response['id_guru']))) {
+            return redirect()->to('/admin/akun')->with('error', $this->apiMessage($response, 'Gagal menghapus akun login guru.'));
+        }
+
         return redirect()->to('/admin/akun')->with('success', 'Akun login guru dihapus, data guru tetap tersimpan.');
     }
+
+    private function safeList($response): array
+    {
+        if (! is_array($response) || array_key_exists('message', $response)) {
+            return [];
+        }
+
+        return array_values($response);
+    }
+
 }

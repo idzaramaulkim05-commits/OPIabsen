@@ -16,7 +16,10 @@ class Jadwal extends BaseController
     public function index()
     {
         $response = $this->client->get('jadwal');
-        $jadwalList = $response ?: [];
+        if ($this->isApiError($response)) {
+            session()->setFlashdata('error', $response['message']);
+        }
+        $jadwalList = $this->safeApiList($response);
 
         return view('data_jadwal', [
             'jadwal' => $jadwalList,
@@ -36,6 +39,10 @@ class Jadwal extends BaseController
     public function edit(int $id)
     {
         $jadwal = $this->client->get('jadwal/' . $id);
+
+        if ($this->isApiError($jadwal)) {
+            return redirect()->to('/jadwal')->with('error', $jadwal['message']);
+        }
 
         if (! $jadwal || isset($jadwal['message'])) {
             return redirect()->to('/jadwal')->with('error', 'Jadwal tidak ditemukan.');

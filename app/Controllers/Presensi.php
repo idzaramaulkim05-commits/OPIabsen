@@ -24,6 +24,7 @@ class Presensi extends BaseController
         $presensi = $this->scopeRowsForRole($presensi, (string) session()->get('role'));
 
         $presensiHariIni = array_values(array_filter($presensi, static fn (array $row): bool => $row['tanggal'] === $today));
+        $presensiHariIni = $this->dedupeDailyRows($presensiHariIni);
 
         return view('presensi', [
             'hariIni' => $hariIni,
@@ -102,6 +103,40 @@ class Presensi extends BaseController
         return view('laporan_presensi_cetak', $this->buildReportContext());
     }
 
+    public function manual()
+    {
+        if ((string) session()->get('role') !== 'admin') {
+            return redirect()->to('/presensi/riwayat')->with('error', 'Akses ditolak.');
+        }
+
+        $payload = [
+            'id_siswa' => (int) $this->request->getPost('id_siswa'),
+            'tanggal' => trim((string) $this->request->getPost('tanggal')),
+            'status' => strtolower(trim((string) $this->request->getPost('status'))),
+            'catatan' => trim((string) $this->request->getPost('catatan')),
+        ];
+
+        if ($payload['id_siswa'] <= 0 || ! $this->validDate($payload['tanggal'])) {
+            return redirect()->back()->withInput()->with('error', 'Pilih siswa dan tanggal yang valid.');
+        }
+
+        if (! in_array($payload['status'], ['sakit', 'izin', 'alpa'], true)) {
+            return redirect()->back()->withInput()->with('error', 'Status manual hanya boleh Sakit, Izin, atau Alpa.');
+        }
+
+        if ($payload['catatan'] === '') {
+            unset($payload['catatan']);
+        }
+
+        $response = $this->client->post('presensi', $payload);
+        if (isset($response['message']) && ! isset($response['id_presensi'])) {
+            return redirect()->back()->withInput()->with('error', $response['message']);
+        }
+
+        $redirectQuery = trim((string) $this->request->getPost('redirect_query'));
+        return redirect()->to('/presensi/riwayat' . ($redirectQuery !== '' ? '?' . $redirectQuery : ''))->with('success', 'Status laporan manual berhasil disimpan.');
+    }
+
     private function buildReportContext(): array
     {
         $mulai = $this->validDate((string) $this->request->getGet('mulai')) ?: date('Y-m-01');
@@ -177,6 +212,7 @@ class Presensi extends BaseController
             'guruTanpaKelas' => $role === 'guru' && $kelasWali === '',
             'scopeInfo' => $scopeInfo,
             'rows' => $rows,
+            'students' => $students,
             'dateColumns' => $dateColumns,
             'matrixRows' => $matrixRows,
             'summaryTotals' => $this->buildSummaryTotals($matrixRows),
@@ -368,8 +404,12 @@ class Presensi extends BaseController
             }
 
             $current = (string) ($matrix[$key]['cells'][$tanggal] ?? '-');
-            if ($this->statusPriority($code) > $this->statusPriority($current)) {
+            $currentSource = (string) (($matrix[$key]['cell_sources'] ?? [])[$tanggal] ?? '');
+            $source = (string) ($row['metode'] ?? '');
+
+            if ($source === 'manual_report' || ($currentSource !== 'manual_report' && $this->statusPriority($code) > $this->statusPriority($current))) {
                 $matrix[$key]['cells'][$tanggal] = $code;
+                $matrix[$key]['cell_sources'][$tanggal] = $source;
             }
         }
 
@@ -412,8 +452,68 @@ class Presensi extends BaseController
             'nama_siswa' => $this->fallback((string) ($student['nama_siswa'] ?? ''), '', '-'),
             'kelas' => $this->fallback((string) ($student['kelas'] ?? ''), '', '-'),
             'cells' => $cells,
+            'cell_sources' => array_fill_keys(array_keys($cells), ''),
             'summary' => ['H' => 0, 'I' => 0, 'S' => 0, 'A' => 0],
         ];
+    }
+
+    private function dedupeDailyRows(array $rows): array
+    {
+        $groups = [];
+
+        foreach ($rows as $row) {
+            $key = $this->studentKey($row);
+            if ($key === '') {
+                $key = 'presensi:' . (int) ($row['id_presensi'] ?? 0);
+            }
+            $key .= '|' . (string) ($row['tanggal'] ?? '');
+
+            if (! isset($groups[$key])) {
+                $groups[$key] = [
+                    'row' => $row,
+                    'count' => 1,
+                ];
+                continue;
+            }
+
+            $groups[$key]['count']++;
+            if ($this->dailyRowRank($row) > $this->dailyRowRank($groups[$key]['row'])) {
+                $groups[$key]['row'] = $row;
+            }
+        }
+
+        $deduped = [];
+        foreach ($groups as $group) {
+            $row = $group['row'];
+            $count = (int) $group['count'];
+            if ($count > 1) {
+                $extra = $count - 1;
+                $note = $extra . ' scan tambahan pada hari yang sama.';
+                $row['catatan'] = trim((string) ($row['catatan'] ?? ''));
+                $row['catatan'] = $row['catatan'] !== '' ? $row['catatan'] . ' ' . $note : $note;
+                $row['scan_count'] = $count;
+            }
+            $deduped[] = $row;
+        }
+
+        usort($deduped, static function (array $a, array $b): int {
+            return strcmp((string) ($b['tanggal'] ?? '') . ' ' . (string) ($b['jam'] ?? ''), (string) ($a['tanggal'] ?? '') . ' ' . (string) ($a['jam'] ?? ''));
+        });
+
+        return $deduped;
+    }
+
+    private function dailyRowRank(array $row): int
+    {
+        $method = (string) ($row['metode'] ?? '');
+        $time = strtotime((string) ($row['tanggal'] ?? '') . ' ' . (string) ($row['jam'] ?? '00:00'));
+        $timeRank = $time !== false ? min(86400, (int) date('G', $time) * 3600 + (int) date('i', $time) * 60 + (int) date('s', $time)) : 0;
+
+        if ($method === 'manual_report') {
+            return 200000 + $timeRank;
+        }
+
+        return 100000 + $timeRank;
     }
 
     private function buildSummaryTotals(array $matrixRows): array

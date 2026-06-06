@@ -18,14 +18,17 @@ $summaryTotals = is_array($summaryTotals ?? null) ? $summaryTotals : [];
         </div>
 
         <section class="print-heading">
-            <div class="print-brand">SmartPresence</div>
-            <h2>Daftar Hadir Peserta Didik</h2>
-            <p>Periode: <?= esc($mulai) ?> s.d. <?= esc($akhir) ?></p>
-            <p>Kelas: <?= esc($kelasFilter !== '' ? $kelasFilter : 'Semua') ?></p>
-            <?php if (! empty($shiftStatusFilter ?? [])): ?>
-                <p>Jadwal/Waktu: <?= esc(implode(', ', array_map(static fn ($status) => (string) (($shiftStatusOptions ?? [])[$status] ?? $status), $shiftStatusFilter))) ?></p>
-            <?php endif; ?>
-            <p>Legenda: H = Hadir, I = Izin, S = Sakit, A = Alpa, - = Belum ada data</p>
+            <img class="print-logo" src="<?= base_url('assets/logo-sekolah.png') ?>" alt="Logo sekolah">
+            <div class="print-heading-text">
+                <div class="print-brand">SmartPresence</div>
+                <h2>Daftar Hadir Peserta Didik</h2>
+                <p>Periode: <?= esc($mulai) ?> s.d. <?= esc($akhir) ?></p>
+                <p>Kelas: <?= esc($kelasFilter !== '' ? $kelasFilter : 'Semua') ?></p>
+                <?php if (! empty($shiftStatusFilter ?? [])): ?>
+                    <p>Jadwal/Waktu: <?= esc(implode(', ', array_map(static fn ($status) => (string) (($shiftStatusOptions ?? [])[$status] ?? $status), $shiftStatusFilter))) ?></p>
+                <?php endif; ?>
+                <p>Legenda: H = Hadir, I = Izin, S = Sakit, A = Alpa, - = Belum ada data</p>
+            </div>
         </section>
 
         <div class="table-wrap">

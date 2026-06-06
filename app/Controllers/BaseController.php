@@ -23,11 +23,13 @@ abstract class BaseController extends Controller
         $response = $this->apiClient->get('master-kelas');
         $master = [];
         
-        if (is_array($response)) {
-            foreach ($response as $item) {
-                if (!empty($item['nama_kelas'])) {
-                    $master[] = $item['nama_kelas'];
-                }
+        foreach ($this->safeApiList($response) as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            if (! empty($item['nama_kelas'])) {
+                $master[] = $item['nama_kelas'];
             }
         }
 
@@ -59,5 +61,31 @@ abstract class BaseController extends Controller
         sort($kelas, SORT_NATURAL | SORT_FLAG_CASE);
 
         return $kelas;
+    }
+
+    protected function safeApiList($response): array
+    {
+        if (! is_array($response) || array_key_exists('message', $response)) {
+            return [];
+        }
+
+        return array_values($response);
+    }
+
+    protected function isApiError($response): bool
+    {
+        return is_array($response) && (bool) ($response['_api_error'] ?? false);
+    }
+
+    protected function apiMessage($response, string $fallback): string
+    {
+        if (is_array($response)) {
+            $message = trim((string) ($response['message'] ?? ''));
+            if ($message !== '') {
+                return $message;
+            }
+        }
+
+        return $fallback;
     }
 }

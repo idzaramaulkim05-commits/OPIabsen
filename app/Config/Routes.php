@@ -69,6 +69,7 @@ $routes->group('', ['filter' => 'role:admin'], static function ($routes) {
 // Presensi mutate admin-only
 $routes->group('', ['filter' => 'role:admin'], static function ($routes) {
 	$routes->post('presensi/simpan', 'Presensi::simpan');
+	$routes->post('presensi/manual', 'Presensi::manual');
 	$routes->post('presensi/update/(:num)', 'Presensi::update/$1');
 	$routes->post('presensi/hapus/(:num)', 'Presensi::hapus/$1');
 });

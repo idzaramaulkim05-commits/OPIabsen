@@ -16,8 +16,12 @@ class Guru extends BaseController
     public function index()
     {
         $response = $this->client->get('guru');
+        if ($this->isApiError($response)) {
+            session()->setFlashdata('error', $response['message']);
+        }
+
         return view('data_guru', [
-            'guru' => $response ?: [],
+            'guru' => $this->safeApiList($response),
         ]);
     }
 
@@ -34,6 +38,10 @@ class Guru extends BaseController
     public function edit(int $id)
     {
         $guru = $this->client->get('guru/' . $id);
+
+        if ($this->isApiError($guru)) {
+            return redirect()->to('/guru')->with('error', $guru['message']);
+        }
 
         if (! $guru || isset($guru['message'])) {
             return redirect()->to('/guru')->with('error', 'Data guru tidak ditemukan.');

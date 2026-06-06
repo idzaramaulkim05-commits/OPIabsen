@@ -23,7 +23,10 @@ class Siswa extends BaseController
     public function data()
     {
         $response = $this->client->get('siswa');
-        $data['siswa'] = $response ?: [];
+        if ($this->isApiError($response)) {
+            session()->setFlashdata('error', $response['message']);
+        }
+        $data['siswa'] = $this->safeApiList($response);
 
         return view('data_siswa', $data);
     }
@@ -60,6 +63,10 @@ class Siswa extends BaseController
     public function edit(int $id)
     {
         $siswa = $this->client->get('siswa/' . $id);
+
+        if ($this->isApiError($siswa)) {
+            return redirect()->to('/siswa/data')->with('error', $siswa['message']);
+        }
 
         if (! $siswa || isset($siswa['message'])) {
             return redirect()->to('/siswa/data')->with('error', 'Data siswa tidak ditemukan.');
