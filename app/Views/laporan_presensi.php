@@ -80,7 +80,7 @@ $redirectQuery = http_build_query($_GET ?? []);
 </section>
 
 <?php if ($role === 'admin'): ?>
-<section class="panel report-manual-panel">
+<section class="panel report-manual-panel" id="absen-manual">
     <h3>Input Sakit, Izin, atau Alpa</h3>
     <form class="form-grid two" action="<?= base_url('presensi/manual') ?>" method="post">
         <input type="hidden" name="redirect_query" value="<?= esc($redirectQuery) ?>">

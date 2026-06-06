@@ -13,7 +13,12 @@ $role = (string) session()->get('role');
         <h2>Presensi Hari Ini</h2>
         <p><?= esc($hariIni ?? '-') ?>, <?= esc($jamSekarang ?? '-') ?></p>
     </div>
-    <a class="btn btn-muted" href="<?= base_url('presensi/riwayat') ?>">Laporan Presensi</a>
+    <div class="btn-group">
+        <?php if ($role === 'admin'): ?>
+            <a class="btn btn-primary" href="<?= base_url('presensi/riwayat#absen-manual') ?>">Absen Manual</a>
+        <?php endif; ?>
+        <a class="btn btn-muted" href="<?= base_url('presensi/riwayat') ?>">Laporan Presensi</a>
+    </div>
 </div>
 
 <section class="panel">

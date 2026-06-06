@@ -89,6 +89,10 @@
     <section class="panel compact">
         <h3>Hak Akses Admin</h3>
         <p>Admin mengelola akun, data guru, data siswa, registrasi wajah, RFID, jadwal, master kelas, dan laporan presensi.</p>
+        <div class="btn-group">
+            <a class="btn btn-primary" href="<?= base_url('presensi/riwayat#absen-manual') ?>">Absen Manual</a>
+            <a class="btn btn-muted" href="<?= base_url('presensi/riwayat') ?>">Lihat Laporan</a>
+        </div>
     </section>
 <?php endif; ?>
 
