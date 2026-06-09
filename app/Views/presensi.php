@@ -15,7 +15,7 @@ $role = (string) session()->get('role');
     </div>
     <div class="btn-group">
         <?php if ($role === 'admin'): ?>
-            <a class="btn btn-primary" href="<?= base_url('presensi/riwayat#absen-manual') ?>">Absen Manual</a>
+            <a class="btn btn-primary" href="<?= base_url('presensi/manual') ?>">Absen Manual</a>
         <?php endif; ?>
         <a class="btn btn-muted" href="<?= base_url('presensi/riwayat') ?>">Laporan Presensi</a>
     </div>

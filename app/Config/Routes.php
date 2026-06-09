@@ -66,9 +66,10 @@ $routes->group('', ['filter' => 'role:admin'], static function ($routes) {
 	$routes->get('master-data/kelas/hapus/(:num)', 'MasterKelas::hapus/$1');
 });
 
-// Presensi mutate admin-only
+// Presensi admin-only
 $routes->group('', ['filter' => 'role:admin'], static function ($routes) {
 	$routes->post('presensi/simpan', 'Presensi::simpan');
+	$routes->get('presensi/manual', 'Presensi::manualForm');
 	$routes->post('presensi/manual', 'Presensi::manual');
 	$routes->post('presensi/update/(:num)', 'Presensi::update/$1');
 	$routes->post('presensi/hapus/(:num)', 'Presensi::hapus/$1');

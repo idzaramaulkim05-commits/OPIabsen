@@ -16,7 +16,7 @@ if ($role === 'admin') {
         ['key' => 'kelas', 'label' => 'Kelas', 'url' => base_url('master-data/kelas')],
         ['key' => 'presensi', 'label' => 'Presensi', 'url' => base_url('presensi')],
         ['key' => 'laporan', 'label' => 'Laporan', 'url' => base_url('presensi/riwayat')],
-        ['key' => 'absen_manual', 'label' => 'Absen Manual', 'url' => base_url('presensi/riwayat#absen-manual')],
+        ['key' => 'absen_manual', 'label' => 'Absen Manual', 'url' => base_url('presensi/manual')],
     ];
 } elseif ($role === 'guru') {
     $navItems = [

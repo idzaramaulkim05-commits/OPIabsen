@@ -15,9 +15,10 @@ class Presensi extends BaseController
 
     public function index()
     {
-        $today = date('Y-m-d');
-        $hariIni = $this->hariIndonesia(date('l'));
-        $jamSekarang = date('H:i');
+        $now = $this->jakartaNow();
+        $today = $now->format('Y-m-d');
+        $hariIni = $this->hariIndonesia($now->format('l'));
+        $jamSekarang = $now->format('H:i');
 
         $jadwal = $this->safeList($this->client->get('jadwal'));
         $presensi = $this->buildReportRows($this->safeList($this->client->get('presensi')));
@@ -103,10 +104,19 @@ class Presensi extends BaseController
         return view('laporan_presensi_cetak', $this->buildReportContext());
     }
 
+    public function manualForm()
+    {
+        if ((string) session()->get('role') !== 'admin') {
+            return redirect()->to('/presensi')->with('error', 'Akses ditolak.');
+        }
+
+        return view('absen_manual', $this->buildManualContext());
+    }
+
     public function manual()
     {
         if ((string) session()->get('role') !== 'admin') {
-            return redirect()->to('/presensi/riwayat')->with('error', 'Akses ditolak.');
+            return redirect()->to('/presensi')->with('error', 'Akses ditolak.');
         }
 
         $payload = [
@@ -133,8 +143,39 @@ class Presensi extends BaseController
             return redirect()->back()->withInput()->with('error', $response['message']);
         }
 
-        $redirectQuery = trim((string) $this->request->getPost('redirect_query'));
-        return redirect()->to('/presensi/riwayat' . ($redirectQuery !== '' ? '?' . $redirectQuery : ''))->with('success', 'Status laporan manual berhasil disimpan.');
+        $kelasFilter = trim((string) $this->request->getPost('kelas_filter'));
+        $redirectQuery = $kelasFilter !== '' ? '?' . http_build_query(['kelas' => $kelasFilter]) : '';
+
+        return redirect()->to('/presensi/manual' . $redirectQuery)->with('success', 'Status laporan manual berhasil disimpan.');
+    }
+
+    private function buildManualContext(): array
+    {
+        $kelasFilter = trim((string) $this->request->getGet('kelas'));
+        $students = $this->buildStudentRows($this->safeList($this->client->get('siswa')));
+
+        $kelasFromStudents = [];
+        foreach ($students as $student) {
+            if (($student['kelas'] ?? '-') !== '-') {
+                $kelasFromStudents[] = (string) $student['kelas'];
+            }
+        }
+
+        $kelasOptions = $this->getMasterKelasList($kelasFromStudents);
+        if ($kelasFilter !== '' && ! in_array($kelasFilter, $kelasOptions, true)) {
+            $kelasOptions = $this->mergeKelasList($kelasOptions, [$kelasFilter]);
+        }
+
+        $students = array_values(array_filter($students, static function (array $student) use ($kelasFilter): bool {
+            return $kelasFilter === '' || (string) ($student['kelas'] ?? '') === $kelasFilter;
+        }));
+
+        return [
+            'kelasFilter' => $kelasFilter,
+            'kelasOptions' => $kelasOptions,
+            'students' => $students,
+            'tanggalHariIni' => $this->jakartaNow()->format('Y-m-d'),
+        ];
     }
 
     private function buildReportContext(): array
@@ -696,6 +737,11 @@ class Presensi extends BaseController
         }
 
         return array_values($response);
+    }
+
+    private function jakartaNow(): \DateTimeImmutable
+    {
+        return new \DateTimeImmutable('now', new \DateTimeZone('Asia/Jakarta'));
     }
 
     private function validDate(string $date): ?string

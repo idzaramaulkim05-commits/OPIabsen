@@ -5,12 +5,10 @@ $shiftStatusFilter = is_array($shiftStatusFilter ?? null) ? $shiftStatusFilter :
 $dateColumns = is_array($dateColumns ?? null) ? $dateColumns : [];
 $matrixRows = is_array($matrixRows ?? null) ? $matrixRows : [];
 $summaryTotals = is_array($summaryTotals ?? null) ? $summaryTotals : [];
-$students = is_array($students ?? null) ? $students : [];
 $kelasFilter = trim((string) ($kelasFilter ?? ''));
 $role = (string) ($role ?? '');
 $guruTanpaKelas = (bool) ($guruTanpaKelas ?? false);
 $scopeInfo = trim((string) ($scopeInfo ?? ''));
-$redirectQuery = http_build_query($_GET ?? []);
 ?>
 <?= view('partials/app_start', [
     'title' => 'Laporan Presensi',
@@ -78,58 +76,6 @@ $redirectQuery = http_build_query($_GET ?? []);
         </div>
     </form>
 </section>
-
-<?php if ($role === 'admin'): ?>
-<section class="panel report-manual-panel" id="absen-manual">
-    <h3>Input Sakit, Izin, atau Alpa</h3>
-    <form class="form-grid two" action="<?= base_url('presensi/manual') ?>" method="post">
-        <input type="hidden" name="redirect_query" value="<?= esc($redirectQuery) ?>">
-
-        <div class="field">
-            <label for="manual_tanggal">Tanggal</label>
-            <input id="manual_tanggal" type="date" name="tanggal" value="<?= esc(old('tanggal', date('Y-m-d'))) ?>" min="<?= esc($mulai) ?>" max="<?= esc($akhir) ?>" required>
-        </div>
-
-        <div class="field">
-            <label for="manual_status">Status</label>
-            <select id="manual_status" name="status" required>
-                <?php foreach (['sakit' => 'Sakit', 'izin' => 'Izin', 'alpa' => 'Alpa'] as $value => $label): ?>
-                    <option value="<?= esc($value) ?>" <?= old('status') === $value ? 'selected' : '' ?>><?= esc($label) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-
-        <div class="field">
-            <label for="manual_siswa">Siswa</label>
-            <select id="manual_siswa" name="id_siswa" required>
-                <option value="">Pilih siswa</option>
-                <?php foreach ($students as $student): ?>
-                    <?php
-                    $idSiswa = (int) ($student['id_siswa'] ?? 0);
-                    if ($idSiswa <= 0) {
-                        continue;
-                    }
-                    $label = trim((string) ($student['nama_siswa'] ?? '-')) . ' - ' . trim((string) ($student['kelas'] ?? '-'));
-                    ?>
-                    <option value="<?= $idSiswa ?>" <?= (string) old('id_siswa') === (string) $idSiswa ? 'selected' : '' ?>>
-                        <?= esc($label) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-            <div class="helper">Daftar siswa mengikuti filter kelas laporan.</div>
-        </div>
-
-        <div class="field">
-            <label for="manual_catatan">Catatan</label>
-            <input id="manual_catatan" type="text" name="catatan" value="<?= esc(old('catatan')) ?>" placeholder="Opsional">
-        </div>
-
-        <div class="btn-group">
-            <button class="btn btn-primary" type="submit">Simpan Status</button>
-        </div>
-    </form>
-</section>
-<?php endif; ?>
 
 <?php if ($guruTanpaKelas): ?>
     <section class="panel compact">
